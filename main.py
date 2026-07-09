@@ -1,8 +1,10 @@
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import requests
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -93,6 +95,103 @@ class ModalTokenRequest(BaseModel):
     verify: bool = True
 
 
+class GenerateJobRequest(BaseModel):
+    youtube_url: str
+    voice_sample_url: str | None = None
+    voice_sample_filename: str | None = None
+    xtts_segment_max_chars: int = 250
+    xtts_segment_min_chars: int = 80
+    gpu_backend: str = "modal"
+    modal_app_name: str = "tooltucode-gpu-v1"
+    modal_tts_gpu: str = "L4"
+    tts_concurrency: int = 4
+    tts_parallel_backend: str = "process"
+    modal_xtts_dispatch: str = "spawn"
+    modal_xtts_artifact_volume: str = "tooltucode-xtts-artifacts"
+    modal_xtts_artifact_prefix: str = "xtts-jobs"
+    modal_xtts_download_workers: int = 8
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _build_render_config(payload: dict) -> dict:
+    return {
+        "xtts_segment_max_chars": int(payload.get("xtts_segment_max_chars", 250)),
+        "xtts_segment_min_chars": int(payload.get("xtts_segment_min_chars", 80)),
+        "gpu_backend": str(payload.get("gpu_backend", "modal")),
+        "modal_app_name": str(payload.get("modal_app_name", "tooltucode-gpu-v1")),
+        "modal_tts_gpu": str(payload.get("modal_tts_gpu", "L4")),
+        "tts_concurrency": int(payload.get("tts_concurrency", 4)),
+        "tts_parallel_backend": str(payload.get("tts_parallel_backend", "process")),
+        "modal_xtts_dispatch": str(payload.get("modal_xtts_dispatch", "spawn")),
+        "modal_xtts_artifact_volume": str(payload.get("modal_xtts_artifact_volume", "tooltucode-xtts-artifacts")),
+        "modal_xtts_artifact_prefix": str(payload.get("modal_xtts_artifact_prefix", "xtts-jobs")),
+        "modal_xtts_download_workers": int(payload.get("modal_xtts_download_workers", 8)),
+    }
+
+
+def _safe_voice_extension(filename: str | None, source_url: str | None = None) -> str:
+    candidates = [filename or ""]
+    if source_url:
+        candidates.append(urlparse(source_url).path)
+    for candidate in candidates:
+        suffix = Path(candidate).suffix.strip()
+        if suffix:
+            return suffix[:12]
+    return ".mp3"
+
+
+def _download_voice_sample(voice_sample_url: str, output_path: str) -> None:
+    parsed = urlparse(voice_sample_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(status_code=400, detail="voice_sample_url must use http or https.")
+    try:
+        with requests.get(voice_sample_url, stream=True, timeout=(10, 120)) as response:
+            response.raise_for_status()
+            with open(output_path, "wb") as file_obj:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        file_obj.write(chunk)
+    except HTTPException:
+        raise
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=400, detail=f"Could not download voice_sample_url: {exc}") from exc
+
+
+def _prepare_voice_sample_file(
+    job_dir: str,
+    voice_sample: UploadFile | None = None,
+    voice_sample_url: str | None = None,
+    voice_sample_filename: str | None = None,
+) -> str:
+    voice_ext = _safe_voice_extension(voice_sample_filename or getattr(voice_sample, "filename", None), voice_sample_url)
+    voice_path = os.path.join(job_dir, f"input_voice{voice_ext}")
+    if voice_sample_url:
+        append_job_log(job_dir, f"Downloading voice sample from URL: {voice_sample_url}")
+        _download_voice_sample(voice_sample_url, voice_path)
+        append_job_log(job_dir, f"Voice sample downloaded to {os.path.basename(voice_path)}.")
+        return voice_path
+    if voice_sample is None:
+        raise HTTPException(status_code=400, detail="voice_sample or voice_sample_url is required.")
+    append_job_log(job_dir, "Saving uploaded voice sample.")
+    save_upload_file(voice_sample, voice_path)
+    return voice_path
+
+
+@app.get("/app-config")
+def get_app_config():
+    use_blob_upload = _env_flag("USE_BLOB_UPLOAD", False)
+    return {
+        "use_blob_upload": use_blob_upload,
+        "blob_upload_url": "/api/blob/upload" if use_blob_upload else None,
+    }
+
+
 @app.post("/modal/deploy")
 def modal_deploy_app(request: ModalDeployRequest):
     return start_modal_deploy("step_3", request.base_app_name, request.strategy)
@@ -125,44 +224,45 @@ def read_root():
 
 
 @app.post("/generate")
-def generate_tts(
-    youtube_url: str = Form(..., description="YouTube URL used to fetch transcript."),
-    voice_sample: UploadFile = File(..., description="Voice sample file, mp3 or wav."),
-    xtts_segment_max_chars: int = Form(250),
-    xtts_segment_min_chars: int = Form(80),
-    gpu_backend: str = Form("modal"),
-    modal_app_name: str = Form("tooltucode-gpu-v1"),
-    modal_tts_gpu: str = Form("L4"),
-    tts_concurrency: int = Form(4),
-    tts_parallel_backend: str = Form("process"),
-    modal_xtts_dispatch: str = Form("spawn"),
-    modal_xtts_artifact_volume: str = Form("tooltucode-xtts-artifacts"),
-    modal_xtts_artifact_prefix: str = Form("xtts-jobs"),
-    modal_xtts_download_workers: int = Form(8),
-):
+async def generate_tts(request: Request):
+    content_type = request.headers.get("content-type", "")
+    voice_sample = None
+    voice_sample_url = None
+    voice_sample_filename = None
+
+    if "application/json" in content_type:
+        try:
+            payload = GenerateJobRequest.model_validate(await request.json())
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON request body: {exc}") from exc
+        youtube_url = payload.youtube_url
+        voice_sample_url = payload.voice_sample_url
+        voice_sample_filename = payload.voice_sample_filename
+        render_config = _build_render_config(payload.model_dump())
+    else:
+        form = await request.form()
+        youtube_url = str(form.get("youtube_url") or "").strip()
+        voice_sample = form.get("voice_sample")
+        voice_sample_url = str(form.get("voice_sample_url") or "").strip() or None
+        voice_sample_filename = str(form.get("voice_sample_filename") or "").strip() or None
+        render_config = _build_render_config(dict(form))
+
+    if not youtube_url:
+        raise HTTPException(status_code=400, detail="youtube_url is required.")
+    if not voice_sample_url and not voice_sample:
+        raise HTTPException(status_code=400, detail="voice_sample or voice_sample_url is required.")
+
     job_dir = create_job_dir()
     job_id = os.path.basename(job_dir)
     init_job_status(job_dir, job_id)
 
-    voice_ext = os.path.splitext(voice_sample.filename or "")[1] or ".mp3"
-    voice_path = os.path.join(job_dir, f"input_voice{voice_ext}")
-    render_config = {
-        "xtts_segment_max_chars": xtts_segment_max_chars,
-        "xtts_segment_min_chars": xtts_segment_min_chars,
-        "gpu_backend": gpu_backend,
-        "modal_app_name": modal_app_name,
-        "modal_tts_gpu": modal_tts_gpu,
-        "tts_concurrency": tts_concurrency,
-        "tts_parallel_backend": tts_parallel_backend,
-        "modal_xtts_dispatch": modal_xtts_dispatch,
-        "modal_xtts_artifact_volume": modal_xtts_artifact_volume,
-        "modal_xtts_artifact_prefix": modal_xtts_artifact_prefix,
-        "modal_xtts_download_workers": modal_xtts_download_workers,
-    }
-
     try:
-        append_job_log(job_dir, "Saving uploaded voice sample.")
-        save_upload_file(voice_sample, voice_path)
+        voice_path = _prepare_voice_sample_file(
+            job_dir,
+            voice_sample=voice_sample if hasattr(voice_sample, "file") else None,
+            voice_sample_url=voice_sample_url,
+            voice_sample_filename=voice_sample_filename,
+        )
         set_overall_status(job_dir, "pending", "Files received. Preparing TTS pipeline.")
         app.state.executor.submit(run_tts_pipeline_job, job_dir, youtube_url, voice_path, render_config)
         return {

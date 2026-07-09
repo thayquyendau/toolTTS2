@@ -24,6 +24,7 @@
 ## Included API
 
 - `POST /generate`
+- `GET /app-config`
 - `GET /job/{job_id}`
 - `GET /job/{job_id}/logs`
 - `GET /job/{job_id}/result`
@@ -39,7 +40,11 @@
 
 1. Use `TTS_worker/` as the Vercel project root.
 2. Vercel entrypoint is `api/index.py`.
-3. Set the required Modal environment variables:
+3. Enable direct Blob upload in Vercel for large voice samples:
+   - create a Vercel Blob store
+   - set `USE_BLOB_UPLOAD=1`
+   - ensure `BLOB_READ_WRITE_TOKEN` is available in the project
+4. Set the required Modal environment variables:
    - `MODAL_APP_NAME`
    - `MODAL_TTS_GPU`
    - `MODAL_XTTS_ARTIFACT_VOLUME`
@@ -63,6 +68,10 @@
    - `python main.py`
 4. Open:
    - `http://127.0.0.1:8000/static/index.html`
+
+Local mode defaults to multipart upload. If you want local behavior closer to Vercel, set:
+
+- `USE_BLOB_UPLOAD=1`
 
 If you keep `gpu_backend=modal`, local run only needs the web stack plus Modal CLI access. If you switch to `gpu_backend=local`, the packages in `requirements-local.txt` are required.
 

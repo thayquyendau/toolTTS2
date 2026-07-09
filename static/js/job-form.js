@@ -1,4 +1,6 @@
 import { apiFetch } from "./api.js";
+import { uploadVoiceSampleToBlob } from "./blob-upload.js";
+import { getAppConfig } from "./config.js";
 import { dom } from "./dom.js";
 import { addLog, clearLogs, fetchRemoteLogs } from "./logs.js";
 import { updateJobStatus, startPolling } from "./polling.js";
@@ -45,18 +47,49 @@ export async function submitJob(event) {
   updateResultLink("pending");
   addLog("Creating job.", "info");
 
-  const formData = new FormData(dom.form);
-  formData.set("modal_app_name", dom.deployModalAppNameInput.value || "tooltucode-gpu-v1");
-  formData.set("modal_xtts_dispatch", "spawn");
-  formData.set("modal_xtts_artifact_volume", "tooltucode-xtts-artifacts");
-  formData.set("modal_xtts_artifact_prefix", "xtts-jobs");
-  formData.set("modal_xtts_download_workers", "8");
-
   try {
-    const response = await apiFetch("/generate", {
-      method: "POST",
-      body: formData
-    });
+    const appConfig = await getAppConfig();
+    const voiceFile = dom.voiceSampleInput.files[0];
+    let response;
+
+    if (appConfig.use_blob_upload) {
+      dom.jobMessageEl.textContent = "Uploading voice sample to storage.";
+      addLog("Uploading voice sample to Vercel Blob.", "info");
+      const blob = await uploadVoiceSampleToBlob(voiceFile, appConfig.blob_upload_url);
+      addLog(`Voice sample uploaded: ${blob.pathname}`, "success");
+      dom.jobMessageEl.textContent = "Voice upload complete. Creating job.";
+      response = await apiFetch("/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          youtube_url: dom.youtubeUrlInput.value,
+          voice_sample_url: blob.url,
+          voice_sample_filename: voiceFile?.name || "",
+          xtts_segment_max_chars: dom.xttsSegmentMaxCharsInput?.value || 250,
+          xtts_segment_min_chars: dom.xttsSegmentMinCharsInput?.value || 80,
+          gpu_backend: dom.gpuBackendSelect?.value || "modal",
+          modal_app_name: dom.deployModalAppNameInput.value || "tooltucode-gpu-v1",
+          modal_tts_gpu: "L4",
+          tts_concurrency: dom.ttsConcurrencyInput?.value || 4,
+          tts_parallel_backend: "process",
+          modal_xtts_dispatch: "spawn",
+          modal_xtts_artifact_volume: "tooltucode-xtts-artifacts",
+          modal_xtts_artifact_prefix: "xtts-jobs",
+          modal_xtts_download_workers: 8
+        })
+      });
+    } else {
+      const formData = new FormData(dom.form);
+      formData.set("modal_app_name", dom.deployModalAppNameInput.value || "tooltucode-gpu-v1");
+      formData.set("modal_xtts_dispatch", "spawn");
+      formData.set("modal_xtts_artifact_volume", "tooltucode-xtts-artifacts");
+      formData.set("modal_xtts_artifact_prefix", "xtts-jobs");
+      formData.set("modal_xtts_download_workers", "8");
+      response = await apiFetch("/generate", {
+        method: "POST",
+        body: formData
+      });
+    }
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.detail || "Failed to create job");
