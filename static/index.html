@@ -23,9 +23,14 @@
         <p class="eyebrow">Vercel operator surface</p>
         <h1>TTS Worker</h1>
       </div>
-      <div class="masthead-meta">
-        <span class="meta-chip">step_1 transcript</span>
-        <span class="meta-chip">step_3 xtts</span>
+      <div class="masthead-actions">
+        <button id="settings-open" class="icon-action" type="button" aria-haspopup="dialog" aria-controls="settings-modal">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.5A3.5 3.5 0 1 0 12 15.5A3.5 3.5 0 1 0 12 8.5Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M19.4 15A1 1 0 0 0 19.6 16.1L19.7 16.2A1.8 1.8 0 0 1 17.2 18.7L17.1 18.6A1 1 0 0 0 16 18.4A1 1 0 0 0 15.4 19.3V19.6A1.8 1.8 0 0 1 11.8 19.6V19.3A1 1 0 0 0 11.2 18.4A1 1 0 0 0 10.1 18.6L10 18.7A1.8 1.8 0 0 1 7.5 16.2L7.6 16.1A1 1 0 0 0 7.8 15A1 1 0 0 0 6.9 14.4H6.6A1.8 1.8 0 0 1 6.6 10.8H6.9A1 1 0 0 0 7.8 10.2A1 1 0 0 0 7.6 9.1L7.5 9A1.8 1.8 0 0 1 10 6.5L10.1 6.6A1 1 0 0 0 11.2 6.8A1 1 0 0 0 11.8 5.9V5.6A1.8 1.8 0 0 1 15.4 5.6V5.9A1 1 0 0 0 16 6.8A1 1 0 0 0 17.1 6.6L17.2 6.5A1.8 1.8 0 0 1 19.7 9L19.6 9.1A1 1 0 0 0 19.4 10.2A1 1 0 0 0 20.3 10.8H20.6A1.8 1.8 0 0 1 20.6 14.4H20.3A1 1 0 0 0 19.4 15Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          <span>Settings</span>
+        </button>
       </div>
       <div class="masthead-rule"></div>
     </header>
@@ -43,54 +48,8 @@
           <label for="voice_sample">Voice sample</label>
           <input id="voice_sample" name="voice_sample" type="file" accept="audio/*" required />
           <div id="voice-file-name" class="field-note">No file selected.</div>
-
-          <label for="xtts_segment_max_chars">Max chars per segment</label>
-          <input id="xtts_segment_max_chars" name="xtts_segment_max_chars" type="number" min="120" max="400" value="250" />
-
-          <label for="xtts_segment_min_chars">Min chars per segment</label>
-          <input id="xtts_segment_min_chars" name="xtts_segment_min_chars" type="number" min="0" max="250" value="80" />
-
-          <label for="gpu_backend">Backend</label>
-          <select id="gpu_backend" name="gpu_backend">
-            <option value="modal" selected>Modal</option>
-            <option value="local">Local GPU</option>
-          </select>
-
-          <label for="tts_concurrency">TTS workers</label>
-          <input id="tts_concurrency" name="tts_concurrency" type="number" min="1" max="8" value="4" />
-
           <button id="submit-btn" class="action" type="submit">Start job</button>
         </form>
-
-        <div class="rule-block">
-          <div class="section-head">
-            <span class="section-index">DEPLOY</span>
-            <h2>Modal step 3</h2>
-          </div>
-          <button id="deploy-toggle" class="action ghost" type="button">Open deploy controls</button>
-          <div id="deploy-summary" class="field-note">tooltucode-gpu-v1-step3</div>
-          <div id="deploy-panel" class="inline-panel" hidden>
-            <label for="modal_app_name">Base app name</label>
-            <input id="modal_app_name" type="text" value="tooltucode-gpu-v1" />
-            <label for="modal_deploy_target">Target</label>
-            <select id="modal_deploy_target">
-              <option value="step_3" selected>step_3</option>
-            </select>
-            <button id="btn-modal-deploy" class="action" type="button">Deploy step 3</button>
-            <pre id="modal-deploy-status" class="status-console">Ready to deploy.</pre>
-          </div>
-        </div>
-
-        <div class="rule-block">
-          <div class="section-head">
-            <span class="section-index">TOKEN</span>
-            <h2>Modal auth</h2>
-          </div>
-          <label for="modal_profile">Profile</label>
-          <input id="modal_profile" type="text" placeholder="default" />
-          <button id="btn-modal-token-new" class="action" type="button">Create Modal token</button>
-          <pre id="modal-token-status" class="status-console">Ready to switch token.</pre>
-        </div>
       </section>
 
       <section class="ledger-column editors">
@@ -184,6 +143,77 @@
         </div>
       </aside>
     </main>
+  </div>
+
+  <div id="settings-modal" class="modal-shell" hidden>
+    <div id="settings-backdrop" class="modal-backdrop"></div>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Operator controls</p>
+          <h2 id="settings-title">Settings</h2>
+        </div>
+        <button id="settings-close" class="icon-action ghost" type="button" aria-label="Close settings">
+          <span>Close</span>
+        </button>
+      </div>
+
+      <div class="modal-sections">
+        <div class="rule-block modal-block">
+          <div class="section-head">
+            <span class="section-index">SETTINGS</span>
+            <h3>Render config</h3>
+          </div>
+          <div class="inline-panel">
+            <label for="xtts_segment_max_chars">Max chars per segment</label>
+            <input id="xtts_segment_max_chars" name="xtts_segment_max_chars" type="number" min="120" max="400" value="250" />
+
+            <label for="xtts_segment_min_chars">Min chars per segment</label>
+            <input id="xtts_segment_min_chars" name="xtts_segment_min_chars" type="number" min="0" max="250" value="80" />
+
+            <label for="gpu_backend">Backend</label>
+            <select id="gpu_backend" name="gpu_backend">
+              <option value="modal" selected>Modal</option>
+              <option value="local">Local GPU</option>
+            </select>
+
+            <label for="tts_concurrency">TTS workers</label>
+            <input id="tts_concurrency" name="tts_concurrency" type="number" min="1" max="8" value="4" />
+          </div>
+        </div>
+
+        <div class="rule-block modal-block">
+          <div class="section-head">
+            <span class="section-index">DEPLOY</span>
+            <h3>Modal step 3</h3>
+          </div>
+          <div id="deploy-summary" class="field-note">tooltucode-gpu-v1-step3</div>
+          <div id="deploy-panel" class="inline-panel">
+            <label for="modal_app_name">Base app name</label>
+            <input id="modal_app_name" type="text" value="tooltucode-gpu-v1" />
+            <label for="modal_deploy_target">Target</label>
+            <select id="modal_deploy_target">
+              <option value="step_3" selected>step_3</option>
+            </select>
+            <button id="btn-modal-deploy" class="action" type="button">Deploy step 3</button>
+            <pre id="modal-deploy-status" class="status-console">Ready to deploy.</pre>
+          </div>
+        </div>
+
+        <div class="rule-block modal-block">
+          <div class="section-head">
+            <span class="section-index">TOKEN</span>
+            <h3>Modal auth</h3>
+          </div>
+          <div class="inline-panel">
+            <label for="modal_profile">Profile</label>
+            <input id="modal_profile" type="text" placeholder="default" />
+            <button id="btn-modal-token-new" class="action" type="button">Create Modal token</button>
+            <pre id="modal-token-status" class="status-console">Ready to switch token.</pre>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script type="module" src="/static/js/main.js"></script>

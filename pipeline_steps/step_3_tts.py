@@ -26,6 +26,14 @@ from pipeline_steps.common import (
 _PROCESS_TTS_CACHED_CONDITIONING = None
 
 
+def _resolve_worker_python() -> str:
+    for env_dir in (".venv", "venv"):
+        candidate = os.path.join(WORKER_DIR, env_dir, "Scripts", "python.exe")
+        if os.path.exists(candidate):
+            return candidate
+    return sys.executable
+
+
 def _numpy_module():
     try:
         import numpy as np
@@ -183,12 +191,11 @@ def _render_tts_chunk(
     use_cuda: bool = False,
 ) -> tuple[int, str]:
     wav_path = os.path.join(output_dir, f"chunk_{chunk_index}.wav")
-    worker_venv_python = os.path.join(WORKER_DIR, "venv", "Scripts", "python.exe")
-    worker_venv_scripts = os.path.join(WORKER_DIR, "venv", "Scripts")
-    tts_python = worker_venv_python if os.path.exists(worker_venv_python) else sys.executable
+    tts_python = _resolve_worker_python()
+    worker_scripts = os.path.dirname(tts_python)
     tts_env = env.copy()
-    if os.path.isdir(worker_venv_scripts):
-        tts_env["PATH"] = worker_venv_scripts + os.pathsep + tts_env.get("PATH", "")
+    if os.path.isdir(worker_scripts):
+        tts_env["PATH"] = worker_scripts + os.pathsep + tts_env.get("PATH", "")
     tts_env, removed_espeak_paths = _remove_espeak_from_path(tts_env)
     tts_cmd = [
         tts_python,

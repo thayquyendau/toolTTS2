@@ -11,6 +11,10 @@
   .ledger-column {
     min-height: auto;
   }
+
+  .modal-panel {
+    width: min(42rem, 100%);
+  }
 }
 
 @media (max-width: 720px) {
@@ -26,11 +30,28 @@
     display: none;
   }
 
+  .masthead-actions {
+    justify-content: flex-start;
+  }
+
   .tab-strip {
     grid-template-columns: 1fr 1fr;
   }
 
   .inline-actions {
     flex-direction: column;
+  }
+
+  .modal-shell {
+    padding: 0.75rem;
+  }
+
+  .modal-panel {
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .modal-head {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

@@ -333,5 +333,8 @@ def _load_existing_status(job_id: str) -> dict:
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    reload = os.getenv("UVICORN_RELOAD", "1").strip().lower() not in {"0", "false", "no"}
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host=host, port=port, reload=reload)

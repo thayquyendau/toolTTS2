@@ -119,9 +119,6 @@ export function initModalDeployPanel() {
   applyDeploySettingsToDom();
   dom.deployModalAppNameInput.addEventListener("input", syncDeploySettingsFromDom);
   dom.deployModalAppNameInput.addEventListener("change", syncDeploySettingsFromDom);
-  dom.deployToggle.addEventListener("click", () => {
-    dom.deployPanel.hidden = !dom.deployPanel.hidden;
-  });
   setDeployStatus("Ready to deploy.");
   dom.modalDeployButton.addEventListener("click", async () => {
     try {

@@ -47,6 +47,14 @@ def _subprocess_env() -> dict[str, str]:
     return env
 
 
+def _resolve_worker_python() -> str:
+    for env_dir in (".venv", "venv"):
+        candidate = WORKER_DIR / env_dir / "Scripts" / "python.exe"
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
 def _sanitize_base_app_name(base_app_name: str | None) -> str:
     value = str(base_app_name or os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1")).strip()
     return value or "tooltucode-gpu-v1"
@@ -211,7 +219,7 @@ def _run_modal_deploy(job_id: str) -> None:
         with _DEPLOYMENT_LOCK:
             job = _DEPLOYMENT_JOBS[job_id]
             cmd = [
-                sys.executable,
+                _resolve_worker_python(),
                 "-X",
                 "utf8",
                 "-m",

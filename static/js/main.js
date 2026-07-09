@@ -4,10 +4,12 @@ import { dom } from "./dom.js";
 import { initModalDeployPanel } from "./deploy.js";
 import { initJobForm, resetWorkspaceState } from "./job-form.js";
 import { initModalTokenPanel } from "./modal-token.js";
+import { initSettingsModal } from "./settings-modal.js";
 import { clearPollInterval } from "./state.js";
 import { initTabs } from "./tabs.js";
 
 initTabs();
+initSettingsModal();
 initModalDeployPanel();
 initModalTokenPanel();
 initJobForm();

@@ -56,6 +56,10 @@ textarea {
   background: transparent;
 }
 
+.icon-action.ghost {
+  background: transparent;
+}
+
 .inline-panel {
   display: grid;
   gap: 0.7rem;

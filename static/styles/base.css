@@ -41,7 +41,9 @@ select,
 .rule-block,
 .section-head,
 .masthead,
-.ledger-column {
+.ledger-column,
+.icon-action,
+.modal-panel {
   border-radius: 0;
 }
 
