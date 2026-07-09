@@ -1,0 +1,164 @@
+.shell {
+  min-height: 100vh;
+  padding: 1.25rem;
+}
+
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.masthead-rule {
+  border-top: 1px solid var(--rule);
+}
+
+.masthead-copy h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  font-weight: 600;
+  line-height: 0.95;
+}
+
+.eyebrow,
+.meta-chip,
+.section-index,
+.tone-label,
+.meta-list dt,
+.action,
+.tab-button {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.masthead-meta {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  border: 1px solid var(--rule);
+  padding: 0.25rem 0.55rem;
+}
+
+.ledger {
+  display: grid;
+  grid-template-columns: minmax(17rem, 20rem) minmax(24rem, 1fr) minmax(18rem, 24rem);
+  border: 1px solid var(--rule);
+}
+
+.ledger-column {
+  min-height: calc(100vh - 8rem);
+  padding: 1rem;
+}
+
+.ledger-column + .ledger-column {
+  border-left: 1px solid var(--rule);
+}
+
+.section-head,
+.rule-block,
+.tab-strip,
+.pane-head,
+.meta-list div,
+.summary-line,
+.progress-row,
+.inline-panel {
+  border-top: 1px solid var(--rule);
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.section-head h2,
+.pane-head h3,
+.rule-block h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.rule-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.tab-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.tab-button {
+  border: 0;
+  border-right: 1px solid var(--rule);
+  padding: 0.85rem 0.5rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tab-button:last-child {
+  border-right: 0;
+}
+
+.tab-button.active {
+  background: rgba(180, 83, 42, 0.08);
+}
+
+.tab-pane {
+  display: none;
+  padding-top: 1rem;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+.pane-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.meta-list {
+  margin: 0;
+}
+
+.meta-list div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 1rem;
+  padding: 0.75rem 0;
+}
+
+.meta-list dt {
+  color: var(--muted);
+}
+
+.meta-list dd {
+  margin: 0;
+}
+
+.summary-list,
+.progress-list {
+  display: grid;
+}
+
+.summary-line,
+.progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0;
+}

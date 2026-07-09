@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TTS Worker Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles/tokens.css" />
+  <link rel="stylesheet" href="/static/styles/base.css" />
+  <link rel="stylesheet" href="/static/styles/layout.css" />
+  <link rel="stylesheet" href="/static/styles/forms.css" />
+  <link rel="stylesheet" href="/static/styles/workspace.css" />
+  <link rel="stylesheet" href="/static/styles/logs.css" />
+  <link rel="stylesheet" href="/static/styles/responsive.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <div class="masthead-rule"></div>
+      <div class="masthead-copy">
+        <p class="eyebrow">Vercel operator surface</p>
+        <h1>TTS Worker</h1>
+      </div>
+      <div class="masthead-meta">
+        <span class="meta-chip">step_1 transcript</span>
+        <span class="meta-chip">step_3 xtts</span>
+      </div>
+      <div class="masthead-rule"></div>
+    </header>
+
+    <main class="ledger">
+      <section class="ledger-column controls">
+        <div class="section-head">
+          <span class="section-index">RUN</span>
+          <h2>Start a job</h2>
+        </div>
+        <form id="job-form" class="stack">
+          <label for="youtube_url">Source URL</label>
+          <input id="youtube_url" name="youtube_url" type="text" placeholder="https://www.youtube.com/watch?v=..." required />
+
+          <label for="voice_sample">Voice sample</label>
+          <input id="voice_sample" name="voice_sample" type="file" accept="audio/*" required />
+          <div id="voice-file-name" class="field-note">No file selected.</div>
+
+          <label for="xtts_segment_max_chars">Max chars per segment</label>
+          <input id="xtts_segment_max_chars" name="xtts_segment_max_chars" type="number" min="120" max="400" value="250" />
+
+          <label for="xtts_segment_min_chars">Min chars per segment</label>
+          <input id="xtts_segment_min_chars" name="xtts_segment_min_chars" type="number" min="0" max="250" value="80" />
+
+          <label for="gpu_backend">Backend</label>
+          <select id="gpu_backend" name="gpu_backend">
+            <option value="modal" selected>Modal</option>
+            <option value="local">Local GPU</option>
+          </select>
+
+          <label for="tts_concurrency">TTS workers</label>
+          <input id="tts_concurrency" name="tts_concurrency" type="number" min="1" max="8" value="4" />
+
+          <button id="submit-btn" class="action" type="submit">Start job</button>
+        </form>
+
+        <div class="rule-block">
+          <div class="section-head">
+            <span class="section-index">DEPLOY</span>
+            <h2>Modal step 3</h2>
+          </div>
+          <button id="deploy-toggle" class="action ghost" type="button">Open deploy controls</button>
+          <div id="deploy-summary" class="field-note">tooltucode-gpu-v1-step3</div>
+          <div id="deploy-panel" class="inline-panel" hidden>
+            <label for="modal_app_name">Base app name</label>
+            <input id="modal_app_name" type="text" value="tooltucode-gpu-v1" />
+            <label for="modal_deploy_target">Target</label>
+            <select id="modal_deploy_target">
+              <option value="step_3" selected>step_3</option>
+            </select>
+            <button id="btn-modal-deploy" class="action" type="button">Deploy step 3</button>
+            <pre id="modal-deploy-status" class="status-console">Ready to deploy.</pre>
+          </div>
+        </div>
+
+        <div class="rule-block">
+          <div class="section-head">
+            <span class="section-index">TOKEN</span>
+            <h2>Modal auth</h2>
+          </div>
+          <label for="modal_profile">Profile</label>
+          <input id="modal_profile" type="text" placeholder="default" />
+          <button id="btn-modal-token-new" class="action" type="button">Create Modal token</button>
+          <pre id="modal-token-status" class="status-console">Ready to switch token.</pre>
+        </div>
+      </section>
+
+      <section class="ledger-column editors">
+        <div class="section-head">
+          <span class="section-index">REVIEW</span>
+          <h2>Operator edits</h2>
+        </div>
+        <div class="tab-strip">
+          <button type="button" class="tab-button active" data-tab="transcript">Transcript</button>
+          <button type="button" class="tab-button" data-tab="script">Script</button>
+          <button type="button" class="tab-button" data-tab="audio">Audio</button>
+          <button type="button" class="tab-button" data-tab="logs">Logs</button>
+        </div>
+
+        <section id="transcript" class="tab-pane active">
+          <div class="pane-head">
+            <h3>Transcript review</h3>
+            <span id="transcript-status-text" class="tone-label">Waiting</span>
+          </div>
+          <textarea id="transcript-text" placeholder="Transcript will appear here after step 1."></textarea>
+          <div class="inline-actions">
+            <button id="btn-transcript-reset" class="action ghost" type="button">Reset</button>
+            <button id="btn-transcript-approve" class="action" type="button">Approve transcript</button>
+          </div>
+        </section>
+
+        <section id="script" class="tab-pane">
+          <div class="pane-head">
+            <h3>Manual script</h3>
+            <span id="script-status-text" class="tone-label">Waiting</span>
+          </div>
+          <textarea id="script-text" placeholder="Paste or edit the narration here before XTTS runs."></textarea>
+          <div class="inline-actions">
+            <button id="btn-script-reset" class="action ghost" type="button">Reset</button>
+            <button id="btn-script-approve" class="action" type="button">Approve script</button>
+          </div>
+        </section>
+
+        <section id="audio" class="tab-pane">
+          <div class="pane-head">
+            <h3>Audio preview</h3>
+            <span id="audio-status" class="tone-label">Waiting</span>
+          </div>
+          <div id="audio-empty" class="empty-line">Audio preview appears after XTTS completes.</div>
+          <div id="audio-panel" hidden>
+            <audio id="audio-player" controls></audio>
+            <div class="inline-actions">
+              <button id="btn-audio-approve" class="action" type="button">Approve voice</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="logs" class="tab-pane">
+          <div class="pane-head">
+            <h3>Logs</h3>
+            <span class="tone-label">Live</span>
+          </div>
+          <div id="log-output" class="log-output">
+            <div class="log-line info">Job logs will appear here.</div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="ledger-column status">
+        <div class="section-head">
+          <span class="section-index">STATE</span>
+          <h2>Job ledger</h2>
+        </div>
+        <dl class="meta-list">
+          <div><dt>Job</dt><dd id="job-id">Not started</dd></div>
+          <div><dt>Status</dt><dd id="job-status-badge">Idle</dd></div>
+          <div><dt>Message</dt><dd id="job-message">Create a job to begin.</dd></div>
+          <div><dt>Output</dt><dd><a id="result-link" href="#" hidden>Open voice.wav</a><span id="result-placeholder">Pending</span></dd></div>
+        </dl>
+
+        <div class="rule-block">
+          <h3>Step progress</h3>
+          <div id="step-progress" class="progress-list">Waiting for pipeline start.</div>
+        </div>
+
+        <div class="rule-block">
+          <h3>Segments</h3>
+          <div id="segment-progress" class="progress-list">No segments yet.</div>
+        </div>
+
+        <div class="rule-block">
+          <h3>Summary</h3>
+          <div id="preview-summary" class="summary-list">
+            <div class="summary-line">No active job.</div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

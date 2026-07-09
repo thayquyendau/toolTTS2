@@ -1,0 +1,21 @@
+.log-output {
+  min-height: 22rem;
+  max-height: 34rem;
+  overflow: auto;
+  border: 1px solid var(--rule);
+  padding: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.log-line + .log-line {
+  margin-top: 0.45rem;
+}
+
+.log-line.success {
+  color: var(--success);
+}
+
+.log-line.error {
+  color: var(--danger);
+}

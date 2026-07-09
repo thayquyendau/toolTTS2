@@ -1,0 +1,6 @@
+fastapi
+modal
+pydantic
+pysbd==0.3.4
+python-multipart
+requests

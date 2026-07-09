@@ -1,0 +1,33 @@
+.tone-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--rule);
+}
+
+.tone-label.success,
+.progress-row.success,
+.status-console.success {
+  color: var(--success);
+}
+
+.tone-label.failure,
+.progress-row.failure,
+.status-console.failure {
+  color: var(--danger);
+}
+
+.tone-label.running,
+.progress-row.running,
+.status-console.running {
+  color: var(--running);
+}
+
+.status-console {
+  min-height: 7rem;
+  padding: 0.8rem;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}

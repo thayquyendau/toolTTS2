@@ -1,0 +1,51 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+body {
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+a {
+  color: inherit;
+}
+
+textarea,
+input,
+select,
+.action,
+.status-console,
+.progress-row,
+.meta-list div,
+.summary-line,
+.tab-button,
+.inline-panel,
+.rule-block,
+.section-head,
+.masthead,
+.ledger-column {
+  border-radius: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}

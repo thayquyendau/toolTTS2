@@ -1,0 +1,13 @@
+:root {
+  --paper: #f7f4ec;
+  --ink: #1e1b18;
+  --rule: #2f2a24;
+  --muted: #6e665d;
+  --signal: #b4532a;
+  --success: #2f6b3d;
+  --danger: #8a2e21;
+  --running: #7c5b18;
+  --font-display: "Cormorant Garamond", serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
