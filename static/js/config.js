@@ -6,7 +6,9 @@ let appConfigPromise;
 export function defaultAppConfig() {
   return {
     use_blob_upload: false,
-    blob_upload_url: null
+    blob_upload_url: null,
+    modal_profiles: [],
+    default_modal_profile: ""
   };
 }
 

@@ -187,29 +187,18 @@
             <span class="section-index">DEPLOY</span>
             <h3>Modal step 3</h3>
           </div>
-          <div id="deploy-summary" class="field-note">tooltucode-gpu-v1-step3</div>
+          <div id="deploy-summary" class="field-note">tooltucode-gpu-v2-step3</div>
           <div id="deploy-panel" class="inline-panel">
+            <label for="modal_profile_key">Profile</label>
+            <select id="modal_profile_key"></select>
             <label for="modal_app_name">Base app name</label>
-            <input id="modal_app_name" type="text" value="tooltucode-gpu-v1" />
+            <input id="modal_app_name" type="text" value="tooltucode-gpu-v2" />
             <label for="modal_deploy_target">Target</label>
             <select id="modal_deploy_target">
               <option value="step_3" selected>step_3</option>
             </select>
             <button id="btn-modal-deploy" class="action" type="button">Deploy step 3</button>
             <pre id="modal-deploy-status" class="status-console">Ready to deploy.</pre>
-          </div>
-        </div>
-
-        <div class="rule-block modal-block">
-          <div class="section-head">
-            <span class="section-index">TOKEN</span>
-            <h3>Modal auth</h3>
-          </div>
-          <div class="inline-panel">
-            <label for="modal_profile">Profile</label>
-            <input id="modal_profile" type="text" placeholder="default" />
-            <button id="btn-modal-token-new" class="action" type="button">Create Modal token</button>
-            <pre id="modal-token-status" class="status-console">Ready to switch token.</pre>
           </div>
         </div>
       </div>

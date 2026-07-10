@@ -10,13 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from modal_profiles import ModalProfileError, get_modal_profile
 from pipeline_steps.common import resolve_modal_app_names
 
 
 WORKER_DIR = Path(__file__).resolve().parent
 DEPLOY_SOURCE = WORKER_DIR / "modal_apps" / "tooltucode_gpu.py"
 DEPLOY_TARGETS = {
-    "step_3": "tooltucode-gpu-v1-step3",
+    "step_3": "tooltucode-gpu-v2-step3",
 }
 DEPLOY_TARGET_LABELS = {
     "step_3": "Deploy Step 3 only",
@@ -37,13 +38,24 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _subprocess_env() -> dict[str, str]:
+def _subprocess_env(profile: dict[str, Any]) -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("PYTHONLEGACYWINDOWSSTDIO", "0")
     env.setdefault("LANG", "C.UTF-8")
     env.setdefault("LC_ALL", "C.UTF-8")
+    token_id_env = profile["token_id_env"]
+    token_secret_env = profile["token_secret_env"]
+    token_id = str(os.getenv(token_id_env, "")).strip()
+    token_secret = str(os.getenv(token_secret_env, "")).strip()
+    if not token_id or not token_secret:
+        raise ModalProfileError(
+            f"Missing Modal credentials for profile '{profile['key']}'. "
+            f"Expected env vars: {token_id_env}, {token_secret_env}"
+        )
+    env["MODAL_TOKEN_ID"] = token_id
+    env["MODAL_TOKEN_SECRET"] = token_secret
     return env
 
 
@@ -55,9 +67,10 @@ def _resolve_worker_python() -> str:
     return sys.executable
 
 
-def _sanitize_base_app_name(base_app_name: str | None) -> str:
-    value = str(base_app_name or os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1")).strip()
-    return value or "tooltucode-gpu-v1"
+def _sanitize_base_app_name(base_app_name: str | None, profile: dict[str, Any] | None = None) -> str:
+    profile_default = (profile or {}).get("modal_app_name", "tooltucode-gpu-v2")
+    value = str(base_app_name or profile_default or os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v2")).strip()
+    return value or "tooltucode-gpu-v2"
 
 
 def _deploy_root_dir() -> Path:
@@ -157,9 +170,9 @@ def _set_job_fields(job_id: str, **fields: Any) -> dict[str, Any]:
         return job
 
 
-def resolve_deploy_target(target: str, base_app_name: str | None = None) -> tuple[str, str]:
+def resolve_deploy_target(target: str, base_app_name: str | None = None, profile: dict[str, Any] | None = None) -> tuple[str, str]:
     del target
-    base_name = _sanitize_base_app_name(base_app_name)
+    base_name = _sanitize_base_app_name(base_app_name, profile)
     derived_names = resolve_modal_app_names(base_name)
     return "step_3", derived_names["modal_step_3_app_name"]
 
@@ -179,8 +192,14 @@ def get_modal_deploy_job(job_id: str) -> dict[str, Any]:
     return _snapshot_job(job_id)
 
 
-def start_modal_deploy(target: str, base_app_name: str | None = None, strategy: str = "rolling") -> dict[str, Any]:
-    normalized_target, deploy_name = resolve_deploy_target(target, base_app_name)
+def start_modal_deploy(
+    target: str,
+    base_app_name: str | None = None,
+    strategy: str = "rolling",
+    profile_key: str | None = None,
+) -> dict[str, Any]:
+    profile = get_modal_profile(profile_key)
+    normalized_target, deploy_name = resolve_deploy_target(target, base_app_name, profile)
     job_id = f"deploy-{uuid.uuid4().hex[:10]}"
     job_dir = _ensure_deploy_job_dir(job_id)
     log_path = _deploy_log_path(job_id)
@@ -191,8 +210,13 @@ def start_modal_deploy(target: str, base_app_name: str | None = None, strategy: 
         "log_path": str(log_path),
         "target": normalized_target,
         "target_label": DEPLOY_TARGET_LABELS[normalized_target],
-        "base_app_name": _sanitize_base_app_name(base_app_name),
+        "profile_key": profile["key"],
+        "profile_label": profile["label"],
+        "base_app_name": _sanitize_base_app_name(base_app_name, profile),
         "app_name": deploy_name,
+        "modal_tts_gpu": profile["modal_tts_gpu"],
+        "modal_xtts_artifact_volume": profile["modal_xtts_artifact_volume"],
+        "modal_xtts_artifact_prefix": profile["modal_xtts_artifact_prefix"],
         "source": str(DEPLOY_SOURCE),
         "strategy": strategy if strategy in {"rolling", "recreate"} else "rolling",
         "status": "pending",
@@ -207,7 +231,7 @@ def start_modal_deploy(target: str, base_app_name: str | None = None, strategy: 
     with _DEPLOYMENT_LOCK:
         _DEPLOYMENT_JOBS[job_id] = job
         _persist_job_state(job)
-    _append_log(job, f"Queued Modal deploy for target={normalized_target}, app={deploy_name}.")
+    _append_log(job, f"Queued Modal deploy for target={normalized_target}, app={deploy_name}, profile={profile['key']}.")
     _DEPLOYMENT_EXECUTOR.submit(_run_modal_deploy, job_id)
     return _snapshot_job(job_id)
 
@@ -236,7 +260,7 @@ def _run_modal_deploy(job_id: str) -> None:
         process = subprocess.Popen(
             cmd,
             cwd=str(WORKER_DIR),
-            env=_subprocess_env(),
+            env=_subprocess_env(get_modal_profile(job.get("profile_key"))),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

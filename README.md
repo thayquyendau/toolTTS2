@@ -1,6 +1,6 @@
 # TTS Worker
 
-`TTS_worker` is a self-contained Vercel app for transcript extraction, manual script approval, XTTS audio generation, Modal step 3 deployment, and Modal token creation.
+`TTS_worker` is a self-contained Vercel app for transcript extraction, manual script approval, XTTS audio generation, and Modal step 3 deployment.
 
 ## Flow
 
@@ -19,12 +19,12 @@
 - live logs
 - step and segment status
 - Modal step 3 deploy panel
-- Modal token creation panel
 
 ## Included API
 
 - `POST /generate`
 - `GET /app-config`
+- `GET /modal/profiles`
 - `GET /job/{job_id}`
 - `GET /job/{job_id}/logs`
 - `GET /job/{job_id}/result`
@@ -33,8 +33,6 @@
 - `GET|POST /job/{job_id}/audio`
 - `POST /modal/deploy`
 - `GET /modal/deploy/{job_id}`
-- `POST /modal/token/new`
-- `GET /modal/token/{job_id}`
 
 ## Job backends
 
@@ -57,17 +55,15 @@ If `TTS_JOB_BACKEND` is not set, the app auto-selects:
 2. Vercel entrypoint is `api/index.py`.
 3. Enable direct Blob upload in Vercel for large voice samples:
    - create a Vercel Blob store
-   - set `USE_BLOB_UPLOAD=1`
    - ensure `BLOB_READ_WRITE_TOKEN` is available in the project
-4. In the Vercel dashboard, enable `Fluid Compute` for the project.
-5. The repo config sets `maxDuration: 60` for the Python entrypoint in `vercel.json`.
-6. Set the required Modal environment variables:
-   - `MODAL_APP_NAME`
-   - `MODAL_TTS_GPU`
-   - `MODAL_XTTS_ARTIFACT_VOLUME`
-   - `MODAL_XTTS_ARTIFACT_PREFIX`
+4. Blob upload is enabled by default on Vercel. `USE_BLOB_UPLOAD` is only needed if you want to force it off.
+5. In the Vercel dashboard, enable `Fluid Compute` for the project.
+6. The repo config sets `maxDuration: 60` for the Python entrypoint in `vercel.json`.
 7. Redeploy the Modal step 3 app after code changes so the deployed app includes:
    - `run_pipeline_step_3`
+8. Configure Modal deploy accounts through `config/modal_profiles.json`.
+   - Each profile maps to secret env names, not raw tokens.
+   - The backend injects `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` from the selected profile at deploy time.
 
 Optional overrides:
 
@@ -75,6 +71,44 @@ Optional overrides:
   - defaults to `tooltucode-tts-jobs`
 - `TTS_JOB_BACKEND`
   - only needed if you want to force `local` or `modal`
+
+## Modal profiles
+
+The checked-in file [config/modal_profiles.json](/mnt/d/xaykenhYTB/ToolTuCode/TTS_worker/config/modal_profiles.json) stores non-secret deploy mappings:
+
+- profile key and label
+- token env variable names
+- default `modal_app_name`
+- default GPU and XTTS artifact settings
+
+Example:
+
+```json
+{
+  "default_profile": "default",
+  "profiles": {
+    "default": {
+      "label": "Default account",
+      "token_id_env": "MODAL_DEFAULT_TOKEN_ID",
+      "token_secret_env": "MODAL_DEFAULT_TOKEN_SECRET",
+      "modal_app_name": "tooltucode-gpu-v2"
+    }
+  }
+}
+```
+
+What you must configure yourself:
+
+- Add secret envs for each Modal account token pair.
+  - Example: `MODAL_DEFAULT_TOKEN_ID`
+  - Example: `MODAL_DEFAULT_TOKEN_SECRET`
+- Update `config/modal_profiles.json` to map each profile to the matching env names.
+- If a different account should deploy to a different app name, set that app name in the same profile entry.
+
+What is no longer needed:
+
+- `modal token new` from the Vercel UI
+- fixed production env such as `MODAL_APP_NAME`, `MODAL_TTS_GPU`, `MODAL_XTTS_ARTIFACT_VOLUME`, `MODAL_XTTS_ARTIFACT_PREFIX` for ordinary deploy switching
 
 ## Requirements
 
@@ -95,7 +129,7 @@ Optional overrides:
 4. Open:
    - `http://127.0.0.1:8000/static/index.html`
 
-Local mode defaults to multipart upload. If you want local behavior closer to Vercel, set:
+Local mode defaults to multipart upload. If you want local behavior closer to Vercel, you can opt in with:
 
 - `USE_BLOB_UPLOAD=1`
 

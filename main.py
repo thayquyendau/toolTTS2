@@ -26,7 +26,6 @@ from job_status import (
     update_script_data,
     update_transcript_data,
 )
-from modal_auth import get_modal_token_job, start_modal_token_new
 from modal_deploy import get_modal_deploy_job, start_modal_deploy
 from modal_job_store import (
     create_modal_job_id,
@@ -46,6 +45,7 @@ from modal_job_store import (
     upload_local_file as modal_upload_local_file,
     approve_field as modal_approve_field,
 )
+from modal_profiles import ModalProfileError, get_modal_profile, list_modal_profiles
 from pipeline_steps.common import ProcessingError
 from pipeline_steps.orchestrator import run_tts_pipeline
 from pipeline_steps.step_1_transcript import step_1_get_transcript
@@ -108,14 +108,9 @@ class TextUpdateRequest(BaseModel):
 
 class ModalDeployRequest(BaseModel):
     target: str = "step_3"
-    base_app_name: str = "tooltucode-gpu-v1"
+    profile_key: str | None = None
+    base_app_name: str | None = None
     strategy: str = "rolling"
-
-
-class ModalTokenRequest(BaseModel):
-    profile: str = "default"
-    activate: bool = True
-    verify: bool = True
 
 
 class GenerateJobRequest(BaseModel):
@@ -125,7 +120,7 @@ class GenerateJobRequest(BaseModel):
     xtts_segment_max_chars: int = 250
     xtts_segment_min_chars: int = 80
     gpu_backend: str = "modal"
-    modal_app_name: str = "tooltucode-gpu-v1"
+    modal_app_name: str = "tooltucode-gpu-v2"
     modal_tts_gpu: str = "L4"
     tts_concurrency: int = 4
     tts_parallel_backend: str = "process"
@@ -142,12 +137,19 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return raw.strip().lower() not in {"", "0", "false", "no", "off"}
 
 
+def _default_modal_app_name() -> str:
+    try:
+        return get_modal_profile().get("modal_app_name", "tooltucode-gpu-v2")
+    except ModalProfileError:
+        return str(os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v2")).strip() or "tooltucode-gpu-v2"
+
+
 def _build_render_config(payload: dict) -> dict:
     return {
         "xtts_segment_max_chars": int(payload.get("xtts_segment_max_chars", 250)),
         "xtts_segment_min_chars": int(payload.get("xtts_segment_min_chars", 80)),
         "gpu_backend": str(payload.get("gpu_backend", "modal")),
-        "modal_app_name": str(payload.get("modal_app_name", "tooltucode-gpu-v1")),
+        "modal_app_name": str(payload.get("modal_app_name", _default_modal_app_name())),
         "modal_tts_gpu": str(payload.get("modal_tts_gpu", "L4")),
         "tts_concurrency": int(payload.get("tts_concurrency", 4)),
         "tts_parallel_backend": str(payload.get("tts_parallel_backend", "process")),
@@ -207,7 +209,7 @@ def _prepare_voice_sample_file(
 
 
 def _resolve_modal_job_app_name(render_config: dict) -> str:
-    base_name = str(render_config.get("modal_app_name") or os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1")).strip()
+    base_name = str(render_config.get("modal_app_name") or _default_modal_app_name()).strip()
     return f"{base_name}-step3"
 
 
@@ -270,16 +272,27 @@ def _init_modal_job_with_voice(
 
 @app.get("/app-config")
 def get_app_config():
-    use_blob_upload = _env_flag("USE_BLOB_UPLOAD", False)
+    use_blob_upload = _env_flag("USE_BLOB_UPLOAD", str(os.getenv("VERCEL", "")).strip() == "1")
+    profile_config = list_modal_profiles()
     return {
         "use_blob_upload": use_blob_upload,
         "blob_upload_url": "/api/blob/upload" if use_blob_upload else None,
+        "modal_profiles": profile_config["profiles"],
+        "default_modal_profile": profile_config["default_profile"],
     }
+
+
+@app.get("/modal/profiles")
+def get_modal_profiles_app():
+    return list_modal_profiles()
 
 
 @app.post("/modal/deploy")
 def modal_deploy_app(request: ModalDeployRequest):
-    return start_modal_deploy("step_3", request.base_app_name, request.strategy)
+    try:
+        return start_modal_deploy("step_3", request.base_app_name, request.strategy, request.profile_key)
+    except ModalProfileError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/modal/deploy/{job_id}")
@@ -288,19 +301,6 @@ def get_modal_deploy_app(job_id: str):
         return get_modal_deploy_job(job_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Deployment job not found.") from exc
-
-
-@app.post("/modal/token/new")
-def modal_token_new_app(request: ModalTokenRequest):
-    return start_modal_token_new(request.profile, request.activate, request.verify)
-
-
-@app.get("/modal/token/{job_id}")
-def get_modal_token_app(job_id: str):
-    try:
-        return get_modal_token_job(job_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Token job not found.") from exc
 
 
 @app.get("/")

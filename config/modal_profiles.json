@@ -1,0 +1,14 @@
+{
+  "default_profile": "default",
+  "profiles": {
+    "default": {
+      "label": "Default account",
+      "token_id_env": "MODAL_DEFAULT_TOKEN_ID",
+      "token_secret_env": "MODAL_DEFAULT_TOKEN_SECRET",
+      "modal_app_name": "tooltucode-gpu-v2",
+      "modal_tts_gpu": "L4",
+      "modal_xtts_artifact_volume": "tooltucode-xtts-artifacts",
+      "modal_xtts_artifact_prefix": "xtts-jobs"
+    }
+  }
+}

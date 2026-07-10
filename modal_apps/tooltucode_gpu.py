@@ -14,7 +14,7 @@ import modal
 from job_status import load_job_status, save_job_status, set_overall_status, update_audio_preview, update_step_status
 
 
-APP_NAME = os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1")
+APP_NAME = os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v2")
 MODEL_CACHE_VOLUME = "tooltucode-model-cache"
 XTTS_ARTIFACT_VOLUME = os.getenv("MODAL_XTTS_ARTIFACT_VOLUME", "tooltucode-xtts-artifacts")
 JOB_VOLUME_NAME = os.getenv("MODAL_TTS_JOB_VOLUME", "tooltucode-tts-jobs")

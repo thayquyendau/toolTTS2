@@ -1,6 +1,7 @@
 import { apiFetch } from "./api.js";
 import { uploadVoiceSampleToBlob } from "./blob-upload.js";
 import { getAppConfig } from "./config.js";
+import { getCurrentDeployProfile, getCurrentDeploySettings } from "./deploy.js";
 import { dom } from "./dom.js";
 import { addLog, clearLogs, fetchRemoteLogs } from "./logs.js";
 import { updateJobStatus, startPolling } from "./polling.js";
@@ -50,6 +51,12 @@ export async function submitJob(event) {
   try {
     const appConfig = await getAppConfig();
     const voiceFile = dom.voiceSampleInput.files[0];
+    const deploySettings = getCurrentDeploySettings();
+    const deployProfile = getCurrentDeployProfile();
+    const modalAppName = deploySettings.modal_app_name || "tooltucode-gpu-v2";
+    const modalTtsGpu = deployProfile?.modal_tts_gpu || "L4";
+    const modalArtifactVolume = deployProfile?.modal_xtts_artifact_volume || "tooltucode-xtts-artifacts";
+    const modalArtifactPrefix = deployProfile?.modal_xtts_artifact_prefix || "xtts-jobs";
     let response;
 
     if (appConfig.use_blob_upload) {
@@ -68,22 +75,23 @@ export async function submitJob(event) {
           xtts_segment_max_chars: dom.xttsSegmentMaxCharsInput?.value || 250,
           xtts_segment_min_chars: dom.xttsSegmentMinCharsInput?.value || 80,
           gpu_backend: dom.gpuBackendSelect?.value || "modal",
-          modal_app_name: dom.deployModalAppNameInput.value || "tooltucode-gpu-v1",
-          modal_tts_gpu: "L4",
+          modal_app_name: modalAppName,
+          modal_tts_gpu: modalTtsGpu,
           tts_concurrency: dom.ttsConcurrencyInput?.value || 4,
           tts_parallel_backend: "process",
           modal_xtts_dispatch: "spawn",
-          modal_xtts_artifact_volume: "tooltucode-xtts-artifacts",
-          modal_xtts_artifact_prefix: "xtts-jobs",
+          modal_xtts_artifact_volume: modalArtifactVolume,
+          modal_xtts_artifact_prefix: modalArtifactPrefix,
           modal_xtts_download_workers: 8
         })
       });
     } else {
       const formData = new FormData(dom.form);
-      formData.set("modal_app_name", dom.deployModalAppNameInput.value || "tooltucode-gpu-v1");
+      formData.set("modal_app_name", modalAppName);
+      formData.set("modal_tts_gpu", modalTtsGpu);
       formData.set("modal_xtts_dispatch", "spawn");
-      formData.set("modal_xtts_artifact_volume", "tooltucode-xtts-artifacts");
-      formData.set("modal_xtts_artifact_prefix", "xtts-jobs");
+      formData.set("modal_xtts_artifact_volume", modalArtifactVolume);
+      formData.set("modal_xtts_artifact_prefix", modalArtifactPrefix);
       formData.set("modal_xtts_download_workers", "8");
       response = await apiFetch("/generate", {
         method: "POST",

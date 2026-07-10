@@ -38,11 +38,9 @@ export const dom = {
   settingsBackdrop: document.getElementById("settings-backdrop"),
   deployPanel: document.getElementById("deploy-panel"),
   deploySummary: document.getElementById("deploy-summary"),
+  deployModalProfileSelect: document.getElementById("modal_profile_key"),
   deployModalAppNameInput: document.getElementById("modal_app_name"),
   deployModalDeployTargetSelect: document.getElementById("modal_deploy_target"),
   modalDeployButton: document.getElementById("btn-modal-deploy"),
-  modalDeployStatus: document.getElementById("modal-deploy-status"),
-  modalProfileInput: document.getElementById("modal_profile"),
-  modalTokenButton: document.getElementById("btn-modal-token-new"),
-  modalTokenStatus: document.getElementById("modal-token-status")
+  modalDeployStatus: document.getElementById("modal-deploy-status")
 };

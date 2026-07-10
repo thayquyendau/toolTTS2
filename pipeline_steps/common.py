@@ -29,7 +29,7 @@ DEFAULT_RENDER_CONFIG = {
     "modal_xtts_download_workers": 8,
     "chunk_batch_size": 0,
     "gpu_backend": os.getenv("TTS_WORKER_GPU_BACKEND", "modal"),
-    "modal_app_name": os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1"),
+    "modal_app_name": os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v2"),
     "modal_step_3_app_name": None,
     "modal_tts_gpu": os.getenv("MODAL_TTS_GPU", "L4"),
 }
@@ -41,7 +41,7 @@ def _normalize_modal_app_name(value: str | None, fallback: str) -> str:
 
 
 def resolve_modal_app_names(base_app_name: str | None = None) -> dict[str, str]:
-    base_name = _normalize_modal_app_name(base_app_name, os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1"))
+    base_name = _normalize_modal_app_name(base_app_name, os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v2"))
     return {
         "modal_app_name": base_name,
         "modal_step_3_app_name": f"{base_name}-step3",
