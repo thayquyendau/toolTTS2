@@ -6,19 +6,23 @@ import tempfile
 import wave
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 from pathlib import PurePosixPath
 
 import modal
+from job_status import load_job_status, save_job_status, set_overall_status, update_audio_preview, update_step_status
 
 
 APP_NAME = os.getenv("MODAL_APP_NAME", "tooltucode-gpu-v1")
 MODEL_CACHE_VOLUME = "tooltucode-model-cache"
 XTTS_ARTIFACT_VOLUME = os.getenv("MODAL_XTTS_ARTIFACT_VOLUME", "tooltucode-xtts-artifacts")
+JOB_VOLUME_NAME = os.getenv("MODAL_TTS_JOB_VOLUME", "tooltucode-tts-jobs")
 REMOTE_ROOT = PurePosixPath("/root")
 REMOTE_WORKER = REMOTE_ROOT / "worker"
 REMOTE_LIVEPORTRAIT = REMOTE_WORKER / "LivePortrait"
 REMOTE_XTTS_ARTIFACTS = PurePosixPath("/xtts-artifacts")
+REMOTE_JOB_ROOT = PurePosixPath("/jobs")
 
 LOCAL_WORKER = Path(__file__).resolve().parents[1]
 LOCAL_PIPELINE_STEPS = LOCAL_WORKER / "pipeline_steps"
@@ -26,6 +30,7 @@ LOCAL_LIVEPORTRAIT = LOCAL_WORKER / "LivePortrait"
 
 volume = modal.Volume.from_name(MODEL_CACHE_VOLUME, create_if_missing=True)
 xtts_artifact_volume = modal.Volume.from_name(XTTS_ARTIFACT_VOLUME, create_if_missing=True, version=2)
+job_volume = modal.Volume.from_name(JOB_VOLUME_NAME, create_if_missing=True, version=2)
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -72,6 +77,7 @@ def _configure_runtime() -> None:
     os.environ.setdefault("TTS_HOME", "/cache/coqui")
     os.environ.setdefault("HF_HOME", "/cache/huggingface")
     os.environ.setdefault("XDG_CACHE_HOME", "/cache")
+    os.environ.setdefault("TTS_WORKER_OUTPUT_DIR", str(REMOTE_JOB_ROOT))
 
 
 def _log_xtts_dependency_report() -> None:
@@ -269,6 +275,26 @@ def _render_xtts_segment_payload(
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
+def _job_dir(job_id: str) -> str:
+    return str(REMOTE_JOB_ROOT / str(job_id))
+
+
+def _prime_script_waiting_state(job_dir: str) -> None:
+    status_data = load_job_status(job_dir)
+    if status_data is None:
+        raise FileNotFoundError(f"Status file not found: {job_dir}")
+    if status_data.get("script_data") is None:
+        status_data["script_data"] = ""
+        status_data["script_approved"] = False
+        save_job_status(job_dir, status_data)
+    update_step_status(
+        job_dir,
+        "step_2_manual_script",
+        "waiting_approval",
+        "Waiting for user approval: manual script before TTS.",
+    )
+
+
 @app.cls(
     gpu=os.getenv("MODAL_TTS_GPU", "L4"),
     volumes={
@@ -415,3 +441,98 @@ def transcribe_whisper_srt(voice_wav_bytes: bytes, render_config: dict) -> dict:
         }
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+@app.function(
+    volumes={
+        "/cache": volume,
+        str(REMOTE_JOB_ROOT): job_volume,
+    },
+    timeout=20 * 60,
+    scaledown_window=10 * 60,
+)
+def run_pipeline_step_1(job_id: str, youtube_url: str, render_config: dict | None = None) -> dict:
+    _configure_runtime()
+    from pipeline_steps.common import normalize_render_config
+    from pipeline_steps.step_1_transcript import step_1_get_transcript
+
+    job_dir = _job_dir(job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    try:
+        set_overall_status(job_dir, "running", "TTS pipeline is running.")
+        transcript_path = step_1_get_transcript(youtube_url, job_dir)
+        _prime_script_waiting_state(job_dir)
+        job_volume.commit()
+        return {
+            "job_id": job_id,
+            "transcript_path": transcript_path,
+            "render_config": normalize_render_config(render_config),
+        }
+    except Exception as exc:
+        set_overall_status(job_dir, "failed", str(exc), error_detail=str(exc))
+        job_volume.commit()
+        raise
+
+
+@app.function(
+    gpu=os.getenv("MODAL_TTS_GPU", "L4"),
+    volumes={
+        "/cache": volume,
+        str(REMOTE_XTTS_ARTIFACTS): xtts_artifact_volume,
+        str(REMOTE_JOB_ROOT): job_volume,
+    },
+    timeout=60 * 60,
+    scaledown_window=10 * 60,
+)
+def run_pipeline_step_3(job_id: str, render_config: dict | None = None) -> dict:
+    _configure_runtime()
+    from pipeline_steps.common import normalize_render_config
+    from pipeline_steps.step_3_tts import step_3_coqui_tts
+
+    job_dir = _job_dir(job_id)
+    config = normalize_render_config(render_config)
+    script_path = os.path.join(job_dir, "script.txt")
+    voice_sample_path = None
+    for candidate_name in os.listdir(job_dir):
+        if candidate_name.startswith("input_voice."):
+            voice_sample_path = os.path.join(job_dir, candidate_name)
+            break
+    if voice_sample_path is None:
+        raise FileNotFoundError("Voice sample file not found for job.")
+    if not os.path.exists(script_path):
+        raise FileNotFoundError("script.txt not found for job.")
+    try:
+        set_overall_status(job_dir, "running", "Generating audio on Modal.")
+        voice_output_path = step_3_coqui_tts(script_path, voice_sample_path, job_dir, config)
+        update_audio_preview(
+            job_dir,
+            {
+                "file": os.path.basename(voice_output_path),
+                "url": f"/job/{job_id}/audio/file",
+            },
+        )
+        set_overall_status(
+            job_dir,
+            "completed",
+            "TTS pipeline completed.",
+            result_file=os.path.basename(voice_output_path),
+        )
+        status_data = load_job_status(job_dir)
+        if status_data is not None:
+            status_data["step_3_spawn_status"] = "completed"
+            status_data["step_3_completed_at"] = datetime.now().isoformat() + "Z"
+            save_job_status(job_dir, status_data)
+        job_volume.commit()
+        return {
+            "job_id": job_id,
+            "result_file": os.path.basename(voice_output_path),
+        }
+    except Exception as exc:
+        set_overall_status(job_dir, "failed", str(exc), error_detail=str(exc))
+        status_data = load_job_status(job_dir)
+        if status_data is not None:
+            status_data["step_3_spawn_status"] = "failed"
+            status_data["step_3_completed_at"] = datetime.now().isoformat() + "Z"
+            save_job_status(job_dir, status_data)
+        job_volume.commit()
+        raise

@@ -2,12 +2,13 @@ import html
 import json
 import os
 import re
+import time
 import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from job_status import append_job_log, update_step_status, update_transcript_data
+from job_status import append_job_log, load_job_status, save_job_status, update_step_status, update_transcript_data
 from pipeline_steps.common import ProcessingError
 
 
@@ -186,6 +187,7 @@ def _download_transcript_with_innertube(video_id: str, youtube_url: str, job_dir
 
 
 def step_1_get_transcript(youtube_url: str, job_dir: str) -> str:
+    started_at = time.perf_counter()
     update_step_status(job_dir, "step_1_get_transcript", "running", "Fetching transcript from YouTube.")
     append_job_log(job_dir, f"Step 1 start: {youtube_url}")
     video_id = _extract_video_id(youtube_url)
@@ -207,5 +209,11 @@ def step_1_get_transcript(youtube_url: str, job_dir: str) -> str:
     with open(out_path, "w", encoding="utf-8") as file_obj:
         file_obj.write(full_text)
     update_transcript_data(job_dir, full_text)
+    elapsed_seconds = round(time.perf_counter() - started_at, 3)
+    status_data = load_job_status(job_dir)
+    if status_data is not None:
+        status_data["step_1_duration_seconds"] = elapsed_seconds
+        save_job_status(job_dir, status_data)
+    append_job_log(job_dir, f"Step 1 duration: {elapsed_seconds:.3f}s")
     update_step_status(job_dir, "step_1_get_transcript", "success", "Transcript saved.")
     return out_path

@@ -36,6 +36,21 @@
 - `POST /modal/token/new`
 - `GET /modal/token/{job_id}`
 
+## Job backends
+
+- `TTS_JOB_BACKEND=local`
+  - local filesystem + in-process background executor
+- `TTS_JOB_BACKEND=modal`
+  - job status/logs/artifacts stored in a Modal Volume
+  - Vercel handles lightweight job setup and approvals
+  - Modal executes:
+    - XTTS phase after script approval
+
+If `TTS_JOB_BACKEND` is not set, the app auto-selects:
+
+- `modal` on Vercel
+- `local` outside Vercel
+
 ## Deploy
 
 1. Use `TTS_worker/` as the Vercel project root.
@@ -44,11 +59,22 @@
    - create a Vercel Blob store
    - set `USE_BLOB_UPLOAD=1`
    - ensure `BLOB_READ_WRITE_TOKEN` is available in the project
-4. Set the required Modal environment variables:
+4. In the Vercel dashboard, enable `Fluid Compute` for the project.
+5. The repo config sets `maxDuration: 60` for the Python entrypoint in `vercel.json`.
+6. Set the required Modal environment variables:
    - `MODAL_APP_NAME`
    - `MODAL_TTS_GPU`
    - `MODAL_XTTS_ARTIFACT_VOLUME`
    - `MODAL_XTTS_ARTIFACT_PREFIX`
+7. Redeploy the Modal step 3 app after code changes so the deployed app includes:
+   - `run_pipeline_step_3`
+
+Optional overrides:
+
+- `MODAL_TTS_JOB_VOLUME`
+  - defaults to `tooltucode-tts-jobs`
+- `TTS_JOB_BACKEND`
+  - only needed if you want to force `local` or `modal`
 
 ## Requirements
 

@@ -72,8 +72,8 @@ def _base_modal_usage() -> dict[str, Any]:
     }
 
 
-def init_job_status(job_dir: str, job_id: str) -> Dict[str, Any]:
-    status_data = {
+def build_initial_job_status(job_id: str) -> Dict[str, Any]:
+    return {
         "job_id": job_id,
         "status": "pending",
         "message": "Job created and waiting for execution.",
@@ -92,7 +92,16 @@ def init_job_status(job_dir: str, job_id: str) -> Dict[str, Any]:
         "render_config": None,
         "segments": [],
         "modal_usage": _base_modal_usage(),
+        "step_3_spawn_status": "idle",
+        "step_3_modal_call_id": None,
+        "step_3_spawned_at": None,
+        "step_3_completed_at": None,
+        "step_1_duration_seconds": None,
     }
+
+
+def init_job_status(job_dir: str, job_id: str) -> Dict[str, Any]:
+    status_data = build_initial_job_status(job_id)
     save_job_status(job_dir, status_data)
     append_job_log(job_dir, "Job initialized.")
     return status_data

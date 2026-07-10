@@ -75,17 +75,24 @@ export async function resetScript() {
 
 export async function approveScript() {
   if (!state.currentJobId) return;
+  dom.btnScriptApprove.disabled = true;
   try {
     if (dom.scriptText.value !== state.currentScriptSnapshot) {
       await putJson(`/job/${state.currentJobId}/script`, { content: dom.scriptText.value });
       state.currentScriptSnapshot = dom.scriptText.value;
     }
-    await postJson(`/job/${state.currentJobId}/script/approve`);
+    const result = await postJson(`/job/${state.currentJobId}/script/approve`);
     state.scriptDirty = false;
     dom.scriptStatusText.textContent = "Approved";
-    addLog("Script approved.", "success");
+    if (result?.modal_call_id) {
+      addLog(`Script approved. Modal call: ${result.modal_call_id}`, "success");
+    } else {
+      addLog(result?.message || "Script approved.", "success");
+    }
     setActiveTab("audio");
   } catch (error) {
     addLog(`Script approval error: ${error.message}`, "error");
+  } finally {
+    dom.btnScriptApprove.disabled = false;
   }
 }
