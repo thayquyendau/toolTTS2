@@ -62,11 +62,13 @@ image = (
         "facexlib==0.3.0",
     )
     .add_local_dir(str(LOCAL_PIPELINE_STEPS), remote_path=str(REMOTE_WORKER / "pipeline_steps"))
-    .add_local_dir(str(LOCAL_LIVEPORTRAIT), remote_path=str(REMOTE_LIVEPORTRAIT))
     .add_local_file(str(LOCAL_WORKER / "job_status.py"), remote_path=str(REMOTE_WORKER / "job_status.py"))
     .add_local_file(str(LOCAL_WORKER / "modal_costs.py"), remote_path=str(REMOTE_WORKER / "modal_costs.py"))
     .add_local_file(str(LOCAL_WORKER / "modal_gpu_client.py"), remote_path=str(REMOTE_WORKER / "modal_gpu_client.py"))
 )
+
+if LOCAL_LIVEPORTRAIT.exists():
+    image = image.add_local_dir(str(LOCAL_LIVEPORTRAIT), remote_path=str(REMOTE_LIVEPORTRAIT))
 
 app = modal.App(APP_NAME, image=image)
 
