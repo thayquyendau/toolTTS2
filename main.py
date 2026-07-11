@@ -26,6 +26,7 @@ from job_status import (
     update_script_data,
     update_transcript_data,
 )
+from modal_auth import get_modal_token_job, start_modal_token_new
 from modal_deploy import get_modal_deploy_job, start_modal_deploy
 from modal_job_store import (
     create_modal_job_id,
@@ -111,6 +112,12 @@ class ModalDeployRequest(BaseModel):
     profile_key: str | None = None
     base_app_name: str | None = None
     strategy: str = "rolling"
+
+
+class ModalTokenRequest(BaseModel):
+    profile: str = "default"
+    activate: bool = True
+    verify: bool = True
 
 
 class GenerateJobRequest(BaseModel):
@@ -301,6 +308,19 @@ def get_modal_deploy_app(job_id: str):
         return get_modal_deploy_job(job_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Deployment job not found.") from exc
+
+
+@app.post("/modal/token/new")
+def modal_token_new_app(request: ModalTokenRequest):
+    return start_modal_token_new(request.profile, request.activate, request.verify)
+
+
+@app.get("/modal/token/{job_id}")
+def get_modal_token_app(job_id: str):
+    try:
+        return get_modal_token_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Token job not found.") from exc
 
 
 @app.get("/")

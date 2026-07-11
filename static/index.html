@@ -184,6 +184,22 @@
 
         <div class="rule-block modal-block">
           <div class="section-head">
+            <span class="section-index">UPLOAD</span>
+            <h3>Voice intake</h3>
+          </div>
+          <div class="inline-panel">
+            <label for="blob_upload_mode">Blob upload mode</label>
+            <select id="blob_upload_mode" name="blob_upload_mode">
+              <option value="auto" selected>Auto</option>
+              <option value="on">Force Blob upload</option>
+              <option value="off">Force direct upload</option>
+            </select>
+            <div id="blob-upload-note" class="field-note">Auto follows backend app-config.</div>
+          </div>
+        </div>
+
+        <div class="rule-block modal-block">
+          <div class="section-head">
             <span class="section-index">DEPLOY</span>
             <h3>Modal step 3</h3>
           </div>
@@ -197,8 +213,10 @@
             <select id="modal_deploy_target">
               <option value="step_3" selected>step_3</option>
             </select>
+            <button id="btn-modal-token-link" class="action ghost" type="button">Link Modal account</button>
             <button id="btn-modal-deploy" class="action" type="button">Deploy step 3</button>
             <pre id="modal-deploy-status" class="status-console">Ready to deploy.</pre>
+            <pre id="modal-token-status" class="status-console">Link flow idle.</pre>
           </div>
         </div>
       </div>

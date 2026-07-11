@@ -8,6 +8,8 @@ export const dom = {
   xttsSegmentMinCharsInput: document.getElementById("xtts_segment_min_chars"),
   gpuBackendSelect: document.getElementById("gpu_backend"),
   ttsConcurrencyInput: document.getElementById("tts_concurrency"),
+  blobUploadModeSelect: document.getElementById("blob_upload_mode"),
+  blobUploadNote: document.getElementById("blob-upload-note"),
   jobIdEl: document.getElementById("job-id"),
   jobStatusBadge: document.getElementById("job-status-badge"),
   jobMessageEl: document.getElementById("job-message"),
@@ -41,6 +43,8 @@ export const dom = {
   deployModalProfileSelect: document.getElementById("modal_profile_key"),
   deployModalAppNameInput: document.getElementById("modal_app_name"),
   deployModalDeployTargetSelect: document.getElementById("modal_deploy_target"),
+  modalTokenButton: document.getElementById("btn-modal-token-link"),
   modalDeployButton: document.getElementById("btn-modal-deploy"),
-  modalDeployStatus: document.getElementById("modal-deploy-status")
+  modalDeployStatus: document.getElementById("modal-deploy-status"),
+  modalTokenStatus: document.getElementById("modal-token-status")
 };

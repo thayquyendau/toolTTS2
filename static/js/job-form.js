@@ -7,6 +7,7 @@ import { addLog, clearLogs, fetchRemoteLogs } from "./logs.js";
 import { updateJobStatus, startPolling } from "./polling.js";
 import { updateResultLink, updateStatusBadge } from "./preview.js";
 import { state, clearPollInterval, resetRuntimeState } from "./state.js";
+import { shouldUseBlobUpload } from "./upload-mode.js";
 
 export function updateFileLabel(input, labelNode, emptyText) {
   const fileName = input.files[0]?.name;
@@ -51,6 +52,7 @@ export async function submitJob(event) {
   try {
     const appConfig = await getAppConfig();
     const voiceFile = dom.voiceSampleInput.files[0];
+    const useBlobUpload = shouldUseBlobUpload(appConfig);
     const deploySettings = getCurrentDeploySettings();
     const deployProfile = getCurrentDeployProfile();
     const modalAppName = deploySettings.modal_app_name || "tooltucode-gpu-v2";
@@ -59,10 +61,11 @@ export async function submitJob(event) {
     const modalArtifactPrefix = deployProfile?.modal_xtts_artifact_prefix || "xtts-jobs";
     let response;
 
-    if (appConfig.use_blob_upload) {
+    if (useBlobUpload) {
+      const blobUploadUrl = appConfig.blob_upload_url || "/api/blob/upload";
       dom.jobMessageEl.textContent = "Uploading voice sample to storage.";
       addLog("Uploading voice sample to Vercel Blob.", "info");
-      const blob = await uploadVoiceSampleToBlob(voiceFile, appConfig.blob_upload_url);
+      const blob = await uploadVoiceSampleToBlob(voiceFile, blobUploadUrl);
       addLog(`Voice sample uploaded: ${blob.pathname}`, "success");
       dom.jobMessageEl.textContent = "Voice upload complete. Creating job.";
       response = await apiFetch("/generate", {

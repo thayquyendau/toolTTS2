@@ -1,6 +1,6 @@
 # TTS Worker
 
-`TTS_worker` is a self-contained Vercel app for transcript extraction, manual script approval, XTTS audio generation, and Modal step 3 deployment.
+`TTS_worker` is a self-contained Vercel app for transcript extraction, manual script approval, XTTS audio generation, Modal step 3 deployment, and optional Modal account linking.
 
 ## Flow
 
@@ -19,12 +19,15 @@
 - live logs
 - step and segment status
 - Modal step 3 deploy panel
+- optional `Link Modal account` flow for manual Modal profile authorization
 
 ## Included API
 
 - `POST /generate`
 - `GET /app-config`
 - `GET /modal/profiles`
+- `POST /modal/token/new`
+- `GET /modal/token/{job_id}`
 - `GET /job/{job_id}`
 - `GET /job/{job_id}/logs`
 - `GET /job/{job_id}/result`
@@ -105,10 +108,11 @@ What you must configure yourself:
 - Update `config/modal_profiles.json` to map each profile to the matching env names.
 - If a different account should deploy to a different app name, set that app name in the same profile entry.
 
-What is no longer needed:
+Notes:
 
-- `modal token new` from the Vercel UI
-- fixed production env such as `MODAL_APP_NAME`, `MODAL_TTS_GPU`, `MODAL_XTTS_ARTIFACT_VOLUME`, `MODAL_XTTS_ARTIFACT_PREFIX` for ordinary deploy switching
+- Deploy uses env-mapped account tokens from the selected profile.
+- `Link Modal account` is separate and only runs `modal token new` for manual browser-based account authorization.
+- fixed production env such as `MODAL_APP_NAME`, `MODAL_TTS_GPU`, `MODAL_XTTS_ARTIFACT_VOLUME`, `MODAL_XTTS_ARTIFACT_PREFIX` are no longer required for ordinary deploy switching
 
 ## Requirements
 
