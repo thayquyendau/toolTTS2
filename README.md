@@ -59,7 +59,10 @@ If `TTS_JOB_BACKEND` is not set, the app auto-selects:
 3. Enable direct Blob upload in Vercel for large voice samples:
    - create a Vercel Blob store
    - ensure `BLOB_READ_WRITE_TOKEN` is available in the project
-4. Blob upload is enabled by default on Vercel. `USE_BLOB_UPLOAD` is only needed if you want to force it off.
+4. Blob upload is enabled only when:
+   - the app is running on Vercel, or `USE_BLOB_UPLOAD=1`
+   - `BLOB_READ_WRITE_TOKEN` is available in the runtime
+   If the token is missing, `/app-config` falls back to direct multipart upload.
 5. In the Vercel dashboard, enable `Fluid Compute` for the project.
 6. `vercel.json` uses the modern `functions` configuration only.
    - `api/index.py` is configured with `maxDuration: 60`
@@ -139,6 +142,9 @@ Notes:
 Local mode defaults to multipart upload. If you want local behavior closer to Vercel, you can opt in with:
 
 - `USE_BLOB_UPLOAD=1`
+  - optional override to force Blob mode on non-Vercel runtimes
+- `BLOB_READ_WRITE_TOKEN`
+  - required for `/api/blob/upload`; without it the UI stays on multipart fallback
 
 If you keep `gpu_backend=modal`, local run only needs the web stack plus Modal CLI access. If you switch to `gpu_backend=local`, the packages in `requirements-local.txt` are required.
 

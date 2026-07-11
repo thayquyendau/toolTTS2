@@ -154,6 +154,7 @@ Khuyen nghi:
 
 1. `USE_BLOB_UPLOAD=1` tren Vercel
 2. local de mac dinh `0`
+3. chi bat `use_blob_upload=true` neu `BLOB_READ_WRITE_TOKEN` ton tai trong runtime
 
 ## VerceI routing
 

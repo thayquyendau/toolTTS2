@@ -22,9 +22,15 @@ module.exports = async function handler(request, response) {
   }
 
   try {
+    const token = String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
+    if (!token) {
+      return response.status(500).json({ error: "BLOB_READ_WRITE_TOKEN is missing in Node runtime." });
+    }
+
     const jsonResponse = await handleUpload({
       body: request.body,
       request,
+      token,
       onBeforeGenerateToken: async (pathname) => {
         if (!String(pathname || "").startsWith("voice-samples/")) {
           throw new Error("Invalid upload pathname.");

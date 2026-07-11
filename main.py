@@ -144,6 +144,10 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return raw.strip().lower() not in {"", "0", "false", "no", "off"}
 
 
+def _has_blob_read_write_token() -> bool:
+    return bool(str(os.getenv("BLOB_READ_WRITE_TOKEN", "")).strip())
+
+
 def _default_modal_app_name() -> str:
     try:
         return get_modal_profile().get("modal_app_name", "tooltucode-gpu-v2")
@@ -279,7 +283,9 @@ def _init_modal_job_with_voice(
 
 @app.get("/app-config")
 def get_app_config():
-    use_blob_upload = _env_flag("USE_BLOB_UPLOAD", str(os.getenv("VERCEL", "")).strip() == "1")
+    blob_token_available = _has_blob_read_write_token()
+    use_blob_upload_requested = _env_flag("USE_BLOB_UPLOAD", str(os.getenv("VERCEL", "")).strip() == "1")
+    use_blob_upload = use_blob_upload_requested and blob_token_available
     profile_config = list_modal_profiles()
     return {
         "use_blob_upload": use_blob_upload,
