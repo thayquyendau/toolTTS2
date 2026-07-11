@@ -61,7 +61,10 @@ If `TTS_JOB_BACKEND` is not set, the app auto-selects:
    - ensure `BLOB_READ_WRITE_TOKEN` is available in the project
 4. Blob upload is enabled by default on Vercel. `USE_BLOB_UPLOAD` is only needed if you want to force it off.
 5. In the Vercel dashboard, enable `Fluid Compute` for the project.
-6. The repo config sets `maxDuration: 60` for the Python entrypoint in `vercel.json`.
+6. `vercel.json` uses the modern `functions` configuration only.
+   - `api/index.py` is configured with `maxDuration: 60`
+   - `/api/blob/upload` is routed to `api/blob/upload.js`
+   - all other paths are routed to `api/index.py`
 7. Redeploy the Modal step 3 app after code changes so the deployed app includes:
    - `run_pipeline_step_3`
 8. Configure Modal deploy accounts through `config/modal_profiles.json`.

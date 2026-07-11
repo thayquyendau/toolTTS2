@@ -1,20 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "functions": {
     "api/index.py": {
       "maxDuration": 60
     }
   },
-  "builds": [
-    {
-      "src": "api/blob/upload.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
   "routes": [
     {
       "src": "/api/blob/upload",
