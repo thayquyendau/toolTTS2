@@ -1,4 +1,6 @@
 -r requirements.txt
+httpx2==2.5.0
+pytest==8.4.2
 uvicorn
 numpy==1.26.4
 torch==2.4.1

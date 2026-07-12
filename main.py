@@ -1,5 +1,5 @@
+import logging
 import os
-import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -20,9 +20,7 @@ from job_status import (
     init_job_status,
     job_log_path,
     load_job_status,
-    save_job_status,
     set_overall_status,
-    update_step_status,
     update_script_data,
     update_transcript_data,
 )
@@ -30,17 +28,21 @@ from modal_auth import get_modal_token_job, start_modal_token_new
 from modal_deploy import get_modal_deploy_job, start_modal_deploy
 from modal_job_store import (
     create_modal_job_id,
+    fail_step_1_spawn,
     fail_step_3_spawn,
     init_modal_job,
     is_modal_job_backend,
     job_exists as modal_job_exists,
     load_status as modal_load_status,
     append_log as modal_append_log,
+    prepare_step_1_spawn,
     prepare_step_3_spawn,
     put_text as modal_put_text,
     read_bytes as modal_read_bytes,
     read_text as modal_read_text,
+    record_step_1_call,
     record_step_3_call,
+    set_job_input as modal_set_job_input,
     spawn_modal_job_function,
     update_text_field as modal_update_text_field,
     upload_local_file as modal_upload_local_file,
@@ -49,7 +51,6 @@ from modal_job_store import (
 from modal_profiles import ModalProfileError, get_modal_profile, list_modal_profiles
 from pipeline_steps.common import ProcessingError
 from pipeline_steps.orchestrator import run_tts_pipeline
-from pipeline_steps.step_1_transcript import step_1_get_transcript
 from utils import create_job_dir, get_job_dir, save_upload_file
 
 
@@ -74,6 +75,7 @@ def _load_repo_env() -> None:
 _load_repo_env()
 
 BASE_DIR = os.path.dirname(__file__)
+logger = logging.getLogger(__name__)
 app = FastAPI(title="TTS Worker", version="1.0")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 app.state.executor = ThreadPoolExecutor(max_workers=2)
@@ -219,34 +221,58 @@ def _prepare_voice_sample_file(
     return voice_path
 
 
-def _resolve_modal_job_app_name(render_config: dict) -> str:
+def _resolve_modal_step_3_app_name(render_config: dict) -> str:
     base_name = str(render_config.get("modal_app_name") or _default_modal_app_name()).strip()
     return f"{base_name}-step3"
 
 
-def _prime_script_waiting_state_local(job_dir: str) -> None:
-    status_data = load_job_status(job_dir)
-    if status_data is None:
-        raise FileNotFoundError(f"Status file not found: {job_dir}")
-    if status_data.get("script_data") is None:
-        status_data["script_data"] = ""
-        status_data["script_approved"] = False
-        save_job_status(job_dir, status_data)
-    update_step_status(
-        job_dir,
-        "step_2_manual_script",
-        "waiting_approval",
-        "Waiting for user approval: manual script before TTS.",
-    )
+def _resolve_modal_pipeline_app_name(render_config: dict) -> str:
+    return str(render_config.get("modal_app_name") or _default_modal_app_name()).strip()
 
 
-def _upload_job_dir_to_modal(job_id: str, job_dir: str) -> None:
-    for entry in os.scandir(job_dir):
-        if entry.is_file():
-            modal_upload_local_file(job_id, entry.path, entry.name)
+def _upload_voice_sample_to_modal(job_id: str, voice_sample: UploadFile, filename: str | None) -> str:
+    suffix = _safe_voice_extension(filename or voice_sample.filename)
+    relative_path = f"input_voice{suffix}"
+    with tempfile.TemporaryDirectory(prefix="tooltucode_modal_input_") as temp_dir:
+        local_path = os.path.join(temp_dir, relative_path)
+        save_upload_file(voice_sample, local_path)
+        modal_upload_local_file(job_id, local_path, relative_path)
+    return relative_path
 
 
-def _init_modal_job_with_voice(
+def _dispatch_modal_step_1(
+    job_id: str,
+    youtube_url: str,
+    voice_sample_url: str | None,
+    voice_sample_filename: str | None,
+    render_config: dict,
+) -> None:
+    prepare_step_1_spawn(job_id)
+    app_name = _resolve_modal_pipeline_app_name(render_config)
+    try:
+        call = spawn_modal_job_function(
+            app_name,
+            "run_pipeline_step_1",
+            job_id,
+            youtube_url,
+            voice_sample_url,
+            voice_sample_filename or "",
+            render_config,
+        )
+    except Exception as exc:
+        fail_step_1_spawn(job_id, str(exc))
+        raise
+
+    try:
+        record_step_1_call(job_id, call.object_id)
+        modal_append_log(job_id, "Modal pipeline step 1 job spawned.")
+    except Exception:
+        # The worker is already running. Do not turn a successful dispatch into
+        # an API failure that could cause the client to submit a duplicate job.
+        logger.exception("Could not persist Modal step 1 call metadata for job %s", job_id)
+
+
+def _create_modal_job(
     youtube_url: str,
     voice_sample: UploadFile | None,
     voice_sample_url: str | None,
@@ -254,31 +280,36 @@ def _init_modal_job_with_voice(
     render_config: dict,
 ) -> dict:
     job_id = create_modal_job_id()
-    temp_dir = tempfile.mkdtemp(prefix="tooltucode_modal_job_")
+    input_data = {
+        "youtube_url": youtube_url,
+        "voice_sample_url": voice_sample_url,
+        "voice_sample_filename": voice_sample_filename or "",
+        "source": "blob" if voice_sample_url else "multipart",
+    }
+    init_modal_job(job_id, render_config)
     try:
-        init_job_status(temp_dir, job_id)
-        temp_voice_path = _prepare_voice_sample_file(
-            temp_dir,
-            voice_sample=voice_sample,
-            voice_sample_url=voice_sample_url,
-            voice_sample_filename=voice_sample_filename,
-        )
-        set_overall_status(temp_dir, "running", "Fetching transcript from YouTube.")
-        step_1_get_transcript(youtube_url, temp_dir)
-        _prime_script_waiting_state_local(temp_dir)
-        status_data = load_job_status(temp_dir) or {}
-        status_data["render_config"] = render_config
-        save_job_status(temp_dir, status_data)
-        init_modal_job(job_id, render_config)
-        _upload_job_dir_to_modal(job_id, temp_dir)
-        modal_append_log(job_id, "Job prepared on API server; waiting for script approval.")
-        return {
-            "job_id": job_id,
-            "status_url": f"/job/{job_id}",
-            "logs_url": f"/job/{job_id}/logs",
-        }
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        if voice_sample is not None and not voice_sample_url:
+            input_data["voice_sample_file"] = _upload_voice_sample_to_modal(
+                job_id,
+                voice_sample,
+                voice_sample_filename,
+            )
+        modal_set_job_input(job_id, input_data)
+    except Exception as exc:
+        fail_step_1_spawn(job_id, f"Job input setup failed: {exc}")
+        raise
+    _dispatch_modal_step_1(
+        job_id,
+        youtube_url,
+        voice_sample_url,
+        voice_sample_filename,
+        render_config,
+    )
+    return {
+        "job_id": job_id,
+        "status_url": f"/job/{job_id}",
+        "logs_url": f"/job/{job_id}/logs",
+    }
 
 
 @app.get("/app-config")
@@ -290,6 +321,7 @@ def get_app_config():
     return {
         "use_blob_upload": use_blob_upload,
         "blob_upload_url": "/api/blob/upload" if use_blob_upload else None,
+        "modal_token_linking_enabled": str(os.getenv("VERCEL", "")).strip() != "1",
         "modal_profiles": profile_config["profiles"],
         "default_modal_profile": profile_config["default_profile"],
     }
@@ -318,11 +350,18 @@ def get_modal_deploy_app(job_id: str):
 
 @app.post("/modal/token/new")
 def modal_token_new_app(request: ModalTokenRequest):
+    if str(os.getenv("VERCEL", "")).strip() == "1":
+        raise HTTPException(
+            status_code=410,
+            detail="Interactive Modal token linking is disabled on Vercel. Configure Modal secrets before deployment.",
+        )
     return start_modal_token_new(request.profile, request.activate, request.verify)
 
 
 @app.get("/modal/token/{job_id}")
 def get_modal_token_app(job_id: str):
+    if str(os.getenv("VERCEL", "")).strip() == "1":
+        raise HTTPException(status_code=410, detail="Interactive Modal token linking is disabled on Vercel.")
     try:
         return get_modal_token_job(job_id)
     except KeyError as exc:
@@ -366,7 +405,7 @@ async def generate_tts(request: Request):
 
     try:
         if is_modal_job_backend():
-            return _init_modal_job_with_voice(
+            return _create_modal_job(
                 youtube_url=youtube_url,
                 voice_sample=voice_sample if hasattr(voice_sample, "file") else None,
                 voice_sample_url=voice_sample_url,
@@ -436,15 +475,18 @@ def _modal_update_text(job_id: str, field: str, content: str, *, approval_field:
 def _modal_spawn_step_3(job_id: str) -> None:
     status = _modal_status(job_id)
     render_config = status.get("render_config") or {}
-    app_name = _resolve_modal_job_app_name(render_config)
+    app_name = _resolve_modal_step_3_app_name(render_config)
     prepare_step_3_spawn(job_id)
     try:
         call = spawn_modal_job_function(app_name, "run_pipeline_step_3", job_id, render_config)
-        record_step_3_call(job_id, call.object_id)
-        modal_append_log(job_id, "Modal step 3 job spawned.")
     except Exception as exc:
         fail_step_3_spawn(job_id, str(exc))
         raise
+    try:
+        record_step_3_call(job_id, call.object_id)
+        modal_append_log(job_id, "Modal step 3 job spawned.")
+    except Exception:
+        logger.exception("Could not persist Modal step 3 call metadata for job %s", job_id)
 
 
 @app.get("/job/{job_id}")

@@ -1,6 +1,11 @@
 {
   "private": true,
+  "scripts": {
+    "build:blob-client": "node scripts/build-blob-client.mjs",
+    "postinstall": "npm run build:blob-client"
+  },
   "dependencies": {
-    "@vercel/blob": "latest"
+    "@vercel/blob": "2.6.1",
+    "esbuild": "0.25.0"
   }
 }

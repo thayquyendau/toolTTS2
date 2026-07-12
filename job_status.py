@@ -97,6 +97,11 @@ def build_initial_job_status(job_id: str) -> Dict[str, Any]:
         "step_3_spawned_at": None,
         "step_3_completed_at": None,
         "step_1_duration_seconds": None,
+        "input": None,
+        "step_1_spawn_status": "idle",
+        "step_1_modal_call_id": None,
+        "step_1_spawned_at": None,
+        "step_1_completed_at": None,
     }
 
 

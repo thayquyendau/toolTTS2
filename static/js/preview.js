@@ -31,6 +31,12 @@ export function renderPreviewSummary(status) {
   if (status.step_1_duration_seconds !== null && status.step_1_duration_seconds !== undefined) {
     lines.push(["Step 1 duration", `${status.step_1_duration_seconds}s`]);
   }
+  if (status.step_1_spawn_status && status.step_1_spawn_status !== "idle") {
+    lines.push(["Step 1 dispatch", status.step_1_spawn_status]);
+  }
+  if (status.step_1_modal_call_id) {
+    lines.push(["Step 1 call", status.step_1_modal_call_id]);
+  }
   if (status.step_3_spawn_status && status.step_3_spawn_status !== "idle") {
     lines.push(["Step 3 spawn", status.step_3_spawn_status]);
   }

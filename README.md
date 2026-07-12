@@ -19,15 +19,15 @@
 - live logs
 - step and segment status
 - Modal step 3 deploy panel
-- optional `Link Modal account` flow for manual Modal profile authorization
+- optional `Link Modal account` flow for local development only
 
 ## Included API
 
 - `POST /generate`
 - `GET /app-config`
 - `GET /modal/profiles`
-- `POST /modal/token/new`
-- `GET /modal/token/{job_id}`
+- `POST /modal/token/new` (local development only)
+- `GET /modal/token/{job_id}` (local development only)
 - `GET /job/{job_id}`
 - `GET /job/{job_id}/logs`
 - `GET /job/{job_id}/result`
@@ -43,8 +43,10 @@
   - local filesystem + in-process background executor
 - `TTS_JOB_BACKEND=modal`
   - job status/logs/artifacts stored in a Modal Volume
-  - Vercel handles lightweight job setup and approvals
+  - Vercel creates and dispatches jobs only; it does not download Blob files or fetch transcripts
   - Modal executes:
+    - voice-sample download from Blob
+    - transcript extraction and script-approval preparation
     - XTTS phase after script approval
 
 If `TTS_JOB_BACKEND` is not set, the app auto-selects:
@@ -68,7 +70,9 @@ If `TTS_JOB_BACKEND` is not set, the app auto-selects:
    - `api/index.py` is configured with `maxDuration: 60`
    - `/api/blob/upload` is routed to `api/blob/upload.js`
    - all other paths are routed to `api/index.py`
-7. Redeploy the Modal step 3 app after code changes so the deployed app includes:
+   - `npm postinstall` bundles the pinned Blob browser client into `static/vendor/`; the browser does not load Blob code from a third-party CDN.
+7. Redeploy the Modal app after code changes so the deployed app includes:
+   - `run_pipeline_step_1`
    - `run_pipeline_step_3`
 8. Configure Modal deploy accounts through `config/modal_profiles.json`.
    - Each profile maps to secret env names, not raw tokens.
@@ -78,6 +82,10 @@ Optional overrides:
 
 - `MODAL_TTS_JOB_VOLUME`
   - defaults to `tooltucode-tts-jobs`
+- `MODAL_VOICE_SAMPLE_MAX_BYTES`
+  - maximum Blob voice-sample size accepted by the Modal worker; defaults to 200 MiB
+- `MODAL_VOICE_SAMPLE_ALLOWED_HOSTS`
+  - comma-separated exact hosts or dot-prefixed suffixes; defaults to `.public.blob.vercel-storage.com`
 - `TTS_JOB_BACKEND`
   - only needed if you want to force `local` or `modal`
 
@@ -117,7 +125,7 @@ What you must configure yourself:
 Notes:
 
 - Deploy uses env-mapped account tokens from the selected profile.
-- `Link Modal account` is separate and only runs `modal token new` for manual browser-based account authorization.
+- Production deployments use env-mapped Modal secrets. Interactive `Link Modal account` is disabled on Vercel because serverless filesystem state is not durable.
 - fixed production env such as `MODAL_APP_NAME`, `MODAL_TTS_GPU`, `MODAL_XTTS_ARTIFACT_VOLUME`, `MODAL_XTTS_ARTIFACT_PREFIX` are no longer required for ordinary deploy switching
 
 ## Requirements

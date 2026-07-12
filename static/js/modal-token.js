@@ -1,4 +1,5 @@
 import { apiFetch, getJson } from "./api.js";
+import { getAppConfig } from "./config.js";
 import { getCurrentDeploySettings } from "./deploy.js";
 import { dom } from "./dom.js";
 
@@ -70,7 +71,13 @@ async function startTokenLink() {
   await refreshTokenStatus();
 }
 
-export function initModalTokenPanel() {
+export async function initModalTokenPanel() {
+  const appConfig = await getAppConfig();
+  if (!appConfig.modal_token_linking_enabled) {
+    dom.modalTokenButton.hidden = true;
+    setTokenStatus("Production uses configured Modal secrets.");
+    return;
+  }
   setTokenStatus("Link flow idle.");
   dom.modalTokenButton.addEventListener("click", async () => {
     try {

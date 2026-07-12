@@ -16,4 +16,3 @@ modal_tokens/
 .ruff_cache/
 
 *.log
-tests/

@@ -11,6 +11,9 @@ from pathlib import Path
 from pathlib import PurePosixPath
 
 import modal
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from job_status import load_job_status, save_job_status, set_overall_status, update_audio_preview, update_step_status
 
 
@@ -60,6 +63,7 @@ image = (
         "safetensors",
         "av",
         "facexlib==0.3.0",
+        "requests==2.32.3",
     )
     .add_local_dir(str(LOCAL_PIPELINE_STEPS), remote_path=str(REMOTE_WORKER / "pipeline_steps"))
     .add_local_file(str(LOCAL_WORKER / "job_status.py"), remote_path=str(REMOTE_WORKER / "job_status.py"))
@@ -297,6 +301,80 @@ def _prime_script_waiting_state(job_dir: str) -> None:
     )
 
 
+def _voice_file_extension(filename: str) -> str:
+    suffix = Path(str(filename or "")).suffix.lower()
+    return suffix if suffix and len(suffix) <= 12 else ".mp3"
+
+
+def _allowed_voice_sample_hosts() -> tuple[str, ...]:
+    configured = os.getenv("MODAL_VOICE_SAMPLE_ALLOWED_HOSTS", ".public.blob.vercel-storage.com")
+    return tuple(host.strip().lower() for host in configured.split(",") if host.strip())
+
+
+def _validate_voice_sample_url(voice_sample_url: str) -> None:
+    parsed = requests.utils.urlparse(voice_sample_url)
+    hostname = str(parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not hostname:
+        raise ValueError("voice_sample_url must be an absolute HTTPS URL.")
+    allowed_hosts = _allowed_voice_sample_hosts()
+    if not allowed_hosts:
+        raise ValueError("MODAL_VOICE_SAMPLE_ALLOWED_HOSTS must contain at least one host.")
+    if not any(
+        hostname == allowed.lstrip(".") or (allowed.startswith(".") and hostname.endswith(allowed))
+        for allowed in allowed_hosts
+    ):
+        raise ValueError("voice_sample_url host is not allowed.")
+
+
+def _voice_download_session() -> requests.Session:
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=0.5,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+
+
+def _download_voice_sample_to_job(voice_sample_url: str, voice_sample_filename: str, job_dir: str) -> str:
+    _validate_voice_sample_url(voice_sample_url)
+    max_bytes = int(os.getenv("MODAL_VOICE_SAMPLE_MAX_BYTES", str(200 * 1024 * 1024)))
+    output_path = os.path.join(job_dir, f"input_voice{_voice_file_extension(voice_sample_filename)}")
+    session = _voice_download_session()
+    try:
+        with session.get(voice_sample_url, stream=True, timeout=(10, 120)) as response:
+            response.raise_for_status()
+            content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+            if content_type and not (content_type.startswith("audio/") or content_type == "application/octet-stream"):
+                raise ValueError(f"Voice sample returned unsupported content type: {content_type}")
+            expected_length = int(response.headers.get("Content-Length") or 0)
+            if expected_length and expected_length > max_bytes:
+                raise ValueError("Voice sample exceeds the configured maximum size.")
+
+            total_bytes = 0
+            with open(output_path, "wb") as file_obj:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if not chunk:
+                        continue
+                    total_bytes += len(chunk)
+                    if total_bytes > max_bytes:
+                        raise ValueError("Voice sample exceeds the configured maximum size.")
+                    file_obj.write(chunk)
+            if total_bytes == 0:
+                raise ValueError("Voice sample download returned an empty file.")
+            return output_path
+    except Exception:
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        raise
+    finally:
+        session.close()
+
+
 @app.cls(
     gpu=os.getenv("MODAL_TTS_GPU", "L4"),
     volumes={
@@ -453,7 +531,13 @@ def transcribe_whisper_srt(voice_wav_bytes: bytes, render_config: dict) -> dict:
     timeout=20 * 60,
     scaledown_window=10 * 60,
 )
-def run_pipeline_step_1(job_id: str, youtube_url: str, render_config: dict | None = None) -> dict:
+def run_pipeline_step_1(
+    job_id: str,
+    youtube_url: str,
+    voice_sample_url: str | None = None,
+    voice_sample_filename: str = "",
+    render_config: dict | None = None,
+) -> dict:
     _configure_runtime()
     from pipeline_steps.common import normalize_render_config
     from pipeline_steps.step_1_transcript import step_1_get_transcript
@@ -461,9 +545,23 @@ def run_pipeline_step_1(job_id: str, youtube_url: str, render_config: dict | Non
     job_dir = _job_dir(job_id)
     os.makedirs(job_dir, exist_ok=True)
     try:
-        set_overall_status(job_dir, "running", "TTS pipeline is running.")
+        status_data = load_job_status(job_dir)
+        if status_data is not None:
+            status_data["step_1_spawn_status"] = "running"
+            save_job_status(job_dir, status_data)
+        if voice_sample_url:
+            set_overall_status(job_dir, "running", "Downloading voice sample from Blob.")
+            _download_voice_sample_to_job(voice_sample_url, voice_sample_filename, job_dir)
+        elif not any(name.startswith("input_voice.") for name in os.listdir(job_dir)):
+            raise FileNotFoundError("Voice sample file not found for job.")
+        set_overall_status(job_dir, "running", "Fetching transcript from YouTube.")
         transcript_path = step_1_get_transcript(youtube_url, job_dir)
         _prime_script_waiting_state(job_dir)
+        status_data = load_job_status(job_dir)
+        if status_data is not None:
+            status_data["step_1_spawn_status"] = "completed"
+            status_data["step_1_completed_at"] = datetime.now().isoformat() + "Z"
+            save_job_status(job_dir, status_data)
         job_volume.commit()
         return {
             "job_id": job_id,
@@ -472,6 +570,11 @@ def run_pipeline_step_1(job_id: str, youtube_url: str, render_config: dict | Non
         }
     except Exception as exc:
         set_overall_status(job_dir, "failed", str(exc), error_detail=str(exc))
+        status_data = load_job_status(job_dir)
+        if status_data is not None:
+            status_data["step_1_spawn_status"] = "failed"
+            status_data["step_1_completed_at"] = datetime.now().isoformat() + "Z"
+            save_job_status(job_dir, status_data)
         job_volume.commit()
         raise
 
@@ -504,6 +607,10 @@ def run_pipeline_step_3(job_id: str, render_config: dict | None = None) -> dict:
     if not os.path.exists(script_path):
         raise FileNotFoundError("script.txt not found for job.")
     try:
+        status_data = load_job_status(job_dir)
+        if status_data is not None:
+            status_data["step_3_spawn_status"] = "running"
+            save_job_status(job_dir, status_data)
         set_overall_status(job_dir, "running", "Generating audio on Modal.")
         voice_output_path = step_3_coqui_tts(script_path, voice_sample_path, job_dir, config)
         update_audio_preview(

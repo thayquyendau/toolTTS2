@@ -13,7 +13,7 @@ export async function uploadVoiceSampleToBlob(file, handleUploadUrl) {
   if (!handleUploadUrl) {
     throw new Error("Blob upload endpoint is not configured.");
   }
-  const { upload } = await import("https://esm.sh/@vercel/blob/client");
+  const { upload } = await import("/static/vendor/vercel-blob-client.js");
   const pathname = `voice-samples/${Date.now()}-${sanitizeBlobPathSegment(file.name)}`;
   return upload(pathname, file, {
     access: "public",

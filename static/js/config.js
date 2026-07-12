@@ -7,6 +7,7 @@ export function defaultAppConfig() {
   return {
     use_blob_upload: false,
     blob_upload_url: null,
+    modal_token_linking_enabled: false,
     modal_profiles: [],
     default_modal_profile: ""
   };

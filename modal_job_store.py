@@ -140,6 +140,15 @@ def init_modal_job(job_id: str, render_config: dict[str, Any] | None = None) -> 
     return status_data
 
 
+def set_job_input(job_id: str, input_data: dict[str, Any]) -> dict[str, Any]:
+    def mutate(status_data: dict[str, Any]) -> None:
+        status_data["input"] = input_data
+
+    status = update_status(job_id, mutate)
+    append_log(job_id, "Job input registered.")
+    return status
+
+
 def update_status(job_id: str, mutator) -> dict[str, Any]:
     status_data = load_status(job_id)
     mutator(status_data)
@@ -179,6 +188,47 @@ def spawn_modal_job_function(app_name: str, function_name: str, *args):
     return fn.spawn(*args)
 
 
+def prepare_step_1_spawn(job_id: str) -> dict[str, Any]:
+    def mutate(status_data: dict[str, Any]) -> None:
+        current = str(status_data.get("step_1_spawn_status") or "idle")
+        if current in {"queued", "running", "completed"}:
+            raise RuntimeError(f"step_1 already {current}")
+        status_data["step_1_spawn_status"] = "queued"
+        status_data["step_1_spawned_at"] = _now_iso()
+        status_data["step_1_modal_call_id"] = None
+        status_data["step_1_completed_at"] = None
+        status_data["status"] = "queued"
+        status_data["message"] = "Job queued for Modal processing."
+
+    status = update_status(job_id, mutate)
+    append_log(job_id, "Step 1 dispatch prepared.")
+    return status
+
+
+def record_step_1_call(job_id: str, call_id: str) -> dict[str, Any]:
+    def mutate(status_data: dict[str, Any]) -> None:
+        if status_data.get("step_1_spawn_status") not in {"completed", "failed"}:
+            status_data["step_1_spawn_status"] = "running"
+        status_data["step_1_modal_call_id"] = call_id
+
+    status = update_status(job_id, mutate)
+    append_log(job_id, f"Step 1 Modal call registered: {call_id}")
+    return status
+
+
+def fail_step_1_spawn(job_id: str, detail: str) -> dict[str, Any]:
+    def mutate(status_data: dict[str, Any]) -> None:
+        status_data["step_1_spawn_status"] = "failed"
+        status_data["step_1_completed_at"] = _now_iso()
+        status_data["status"] = "failed"
+        status_data["message"] = "Could not prepare or dispatch the job to Modal."
+        status_data["error_detail"] = detail
+
+    status = update_status(job_id, mutate)
+    append_log(job_id, f"Step 1 dispatch failed: {detail}")
+    return status
+
+
 def prepare_step_3_spawn(job_id: str) -> dict[str, Any]:
     def mutate(status_data: dict[str, Any]) -> None:
         current = str(status_data.get("step_3_spawn_status") or "idle")
@@ -195,7 +245,8 @@ def prepare_step_3_spawn(job_id: str) -> dict[str, Any]:
 
 def record_step_3_call(job_id: str, call_id: str) -> dict[str, Any]:
     def mutate(status_data: dict[str, Any]) -> None:
-        status_data["step_3_spawn_status"] = "running"
+        if status_data.get("step_3_spawn_status") not in {"completed", "failed"}:
+            status_data["step_3_spawn_status"] = "running"
         status_data["step_3_modal_call_id"] = call_id
     status = update_status(job_id, mutate)
     append_log(job_id, f"Step 3 Modal call registered: {call_id}")
